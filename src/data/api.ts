@@ -52,25 +52,39 @@ function toFiniteNumberOrUndefined(value: unknown): number | undefined {
   return undefined;
 }
 
-function requireString(value: string | null | undefined, field: string): string {
+function requireString(
+  value: string | null | undefined,
+  field: string,
+): string {
   if (typeof value === "string") {
     return value;
   }
   throw new Error(`mapPositionSnapshotToRecord: fehlendes ${field}`);
 }
 
-function requireNumber(value: number | null | undefined, field: string): number {
+function requireNumber(
+  value: number | null | undefined,
+  field: string,
+): number {
   if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
   throw new Error(`mapPositionSnapshotToRecord: fehlendes ${field}`);
 }
 
-function mapPositionSnapshotToRecord(snapshot: NormalizedPositionSnapshot): PortfolioPosition {
+function mapPositionSnapshotToRecord(
+  snapshot: NormalizedPositionSnapshot,
+): PortfolioPosition {
   const securityUuid = requireString(snapshot.security_uuid, "security_uuid");
   const name = requireString(snapshot.name, "name");
-  const currentHoldings = requireNumber(snapshot.current_holdings, "current_holdings");
-  const purchaseValue = requireNumber(snapshot.purchase_value, "purchase_value");
+  const currentHoldings = requireNumber(
+    snapshot.current_holdings,
+    "current_holdings",
+  );
+  const purchaseValue = requireNumber(
+    snapshot.purchase_value,
+    "purchase_value",
+  );
   const currentValue = requireNumber(snapshot.current_value, "current_value");
 
   const position: PortfolioPosition = {
@@ -79,9 +93,14 @@ function mapPositionSnapshotToRecord(snapshot: NormalizedPositionSnapshot): Port
     current_holdings: currentHoldings,
     purchase_value: purchaseValue,
     current_value: currentValue,
-    average_cost: (snapshot.average_cost as AverageCostPayload | null | undefined) ?? null,
-    performance: (snapshot.performance as PerformanceMetricsPayload | null | undefined) ?? null,
-    aggregation: (snapshot.aggregation as HoldingsAggregationPayload | null | undefined) ?? null,
+    average_cost:
+      (snapshot.average_cost as AverageCostPayload | null | undefined) ?? null,
+    performance:
+      (snapshot.performance as PerformanceMetricsPayload | null | undefined) ??
+      null,
+    aggregation:
+      (snapshot.aggregation as HoldingsAggregationPayload | null | undefined) ??
+      null,
   };
 
   if (snapshot.currency_code !== undefined) {
@@ -282,15 +301,17 @@ export interface DashboardPushPayloadMap {
   accounts: AccountSummary[] | null | undefined;
   portfolio_values: PortfolioValuesUpdateEntry[] | null | undefined;
   portfolio_positions:
-  | PortfolioPositionsUpdatePayload
-  | PortfolioPositionsUpdatePayload[]
-  | null
-  | undefined;
+    | PortfolioPositionsUpdatePayload
+    | PortfolioPositionsUpdatePayload[]
+    | null
+    | undefined;
   security_snapshot: SecuritySnapshotResponse | null | undefined;
   security_history: SecurityHistoryResponse | null | undefined;
 }
 
-export interface DashboardPushEnvelope<T extends DashboardDataType = DashboardDataType> {
+export interface DashboardPushEnvelope<
+  T extends DashboardDataType = DashboardDataType,
+> {
   entry_id?: string | null;
   data_type: T;
   data: DashboardPushPayloadMap[T];
@@ -298,8 +319,13 @@ export interface DashboardPushEnvelope<T extends DashboardDataType = DashboardDa
   [key: string]: unknown;
 }
 
-export function isDashboardDataType(value: unknown): value is DashboardDataType {
-  return typeof value === "string" && (DASHBOARD_DATA_TYPES as readonly string[]).includes(value);
+export function isDashboardDataType(
+  value: unknown,
+): value is DashboardDataType {
+  return (
+    typeof value === "string" &&
+    (DASHBOARD_DATA_TYPES as readonly string[]).includes(value)
+  );
 }
 
 function deriveEntryId(
@@ -318,7 +344,9 @@ function deriveEntryId(
       (panels.ppreader as PanelConfigLike | undefined) ??
       (panels.pp_reader as PanelConfigLike | undefined) ??
       (Object.values(panels).find(
-        panel => (panel as PanelConfigLike | undefined)?.webcomponent_name === "pp-reader-panel",
+        (panel) =>
+          (panel as PanelConfigLike | undefined)?.webcomponent_name ===
+          "pp-reader-panel",
       ) as PanelConfigLike | undefined);
 
     entryId =
@@ -362,7 +390,9 @@ export async function fetchDashboardDataWS(
   const portfolios = deserializePortfolioSnapshots(raw.portfolios);
   const lastFileUpdate = toStringOrNull(raw.last_file_update);
   const transactions = toArray(raw.transactions);
-  const normalizedPayload = deserializeNormalizedDashboardSnapshot(raw.normalized_payload);
+  const normalizedPayload = deserializeNormalizedDashboardSnapshot(
+    raw.normalized_payload,
+  );
 
   return {
     accounts,
@@ -393,7 +423,9 @@ export async function fetchAccountsWS(
   });
 
   const accounts = deserializeAccountSnapshots(raw.accounts);
-  const normalizedPayload = deserializeNormalizedDashboardSnapshot(raw.normalized_payload);
+  const normalizedPayload = deserializeNormalizedDashboardSnapshot(
+    raw.normalized_payload,
+  );
 
   return {
     accounts,
@@ -450,7 +482,9 @@ export async function fetchPortfoliosWS(
   });
 
   const portfolios = deserializePortfolioSnapshots(raw.portfolios);
-  const normalizedPayload = deserializeNormalizedDashboardSnapshot(raw.normalized_payload);
+  const normalizedPayload = deserializeNormalizedDashboardSnapshot(
+    raw.normalized_payload,
+  );
 
   return {
     portfolios,
@@ -486,7 +520,9 @@ export async function fetchPortfolioPositionsWS(
   const normalizedPositions = deserializePositionSnapshots(raw.positions);
   const positions = normalizedPositions.map(mapPositionSnapshotToRecord);
 
-  const normalizedPayloadMeta = deserializeNormalizedPayloadMetadata(raw.normalized_payload);
+  const normalizedPayloadMeta = deserializeNormalizedPayloadMetadata(
+    raw.normalized_payload,
+  );
 
   const response: PortfolioPositionsResponse = {
     portfolio_uuid: toStringOrNull(raw.portfolio_uuid) ?? portfolioUuid,
@@ -586,8 +622,12 @@ export async function fetchSecurityHistoryWS(
     security_uuid: securityUuid,
   };
 
-  const { startDate, endDate, start_date: startDateRaw, end_date: endDateRaw } =
-    options || {};
+  const {
+    startDate,
+    endDate,
+    start_date: startDateRaw,
+    end_date: endDateRaw,
+  } = options || {};
 
   const resolvedStart = startDate ?? startDateRaw;
   if (resolvedStart !== undefined && resolvedStart !== null) {
@@ -599,7 +639,8 @@ export async function fetchSecurityHistoryWS(
     payload.end_date = resolvedEnd;
   }
 
-  const response = await hass.connection.sendMessagePromise<SecurityHistoryResponse>(payload);
+  const response =
+    await hass.connection.sendMessagePromise<SecurityHistoryResponse>(payload);
   if (!Array.isArray(response.prices)) {
     response.prices = [];
   }
@@ -656,13 +697,15 @@ export async function fetchRealizedPerformance(
   if (!hass || !entryId) return [];
 
   try {
-    const response = await hass.connection.sendMessagePromise<{ trades: RealizedTrade[] }>({
-      type: 'pp_reader/get_trades',
+    const response = await hass.connection.sendMessagePromise<{
+      trades: RealizedTrade[];
+    }>({
+      type: "pp_reader/get_trades",
       entry_id: entryId,
     });
     return response.trades;
   } catch (err) {
-    console.error('Error fetching realized performance data:', err);
+    console.error("Error fetching realized performance data:", err);
     return [];
   }
 }
@@ -689,7 +732,7 @@ export interface DailyWealthFetchOptions {
 }
 
 export interface DailyWealthRequest extends DailyWealthFetchOptions {
-  type: 'pp_reader/get_daily_wealth';
+  type: "pp_reader/get_daily_wealth";
   entry_id: string;
   [key: string]: unknown;
 }
@@ -716,7 +759,7 @@ export interface DailyWealthRecord {
 }
 
 export interface DailyWealthScopeRecord {
-  scope_type: 'account' | 'portfolio';
+  scope_type: "account" | "portfolio";
   scope_id: string;
   scope_name?: string;
   date: string;
@@ -755,7 +798,7 @@ export async function fetchDailyWealthWS(
 
   try {
     const payload: DailyWealthRequest = {
-      type: 'pp_reader/get_daily_wealth',
+      type: "pp_reader/get_daily_wealth",
       entry_id: entryId,
       ...options,
     };
@@ -768,9 +811,11 @@ export async function fetchDailyWealthWS(
       }
     }
 
-    return await hass.connection.sendMessagePromise<DailyWealthResponse>(payload);
+    return await hass.connection.sendMessagePromise<DailyWealthResponse>(
+      payload,
+    );
   } catch (err) {
-    console.error('Error fetching daily wealth data:', err);
+    console.error("Error fetching daily wealth data:", err);
     throw err;
   }
 }

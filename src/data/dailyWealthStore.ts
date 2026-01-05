@@ -2,8 +2,8 @@
  * Daily wealth state and caching helper for the Analyse tab.
  */
 
-import type { PanelConfigLike } from '../tabs/types';
-import type { HomeAssistant } from '../types/home-assistant';
+import type { PanelConfigLike } from "../tabs/types";
+import type { HomeAssistant } from "../types/home-assistant";
 import {
   fetchDailyWealthWS,
   type DailyWealthFetchOptions,
@@ -13,9 +13,9 @@ import {
   type DailyWealthResponse,
   type DailyWealthScopeRecord,
   type DailyWealthSlices,
-} from './api';
+} from "./api";
 
-type DailyWealthStatus = 'idle' | 'loading' | 'loaded' | 'error';
+type DailyWealthStatus = "idle" | "loading" | "loaded" | "error";
 
 export type DailyWealthSelection = DailyWealthFetchOptions;
 
@@ -32,7 +32,7 @@ type LoadDailyWealthOptions = DailyWealthSelection & {
 };
 
 let state: DailyWealthState = {
-  status: 'idle',
+  status: "idle",
   error: null,
   data: null,
   selection: null,
@@ -42,9 +42,9 @@ let state: DailyWealthState = {
 let lastRequestKey: string | null = null;
 
 function toErrorMessage(error: unknown): string {
-  if (typeof error === 'string') {
+  if (typeof error === "string") {
     const trimmed = error.trim();
-    return trimmed || 'Unbekannter Fehler';
+    return trimmed || "Unbekannter Fehler";
   }
   if (error instanceof Error) {
     const trimmed = error.message.trim();
@@ -58,7 +58,7 @@ function toErrorMessage(error: unknown): string {
 }
 
 function normalizeDate(value: unknown): string | null {
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return null;
   }
   const trimmed = value.trim();
@@ -66,7 +66,7 @@ function normalizeDate(value: unknown): string | null {
 }
 
 function normalizeRange(range: unknown): DailyWealthRange | null {
-  if (!range || typeof range !== 'object') {
+  if (!range || typeof range !== "object") {
     return null;
   }
   const raw = range as Record<string, unknown>;
@@ -83,8 +83,8 @@ function normalizeScopeList(list: unknown): string[] {
     return [];
   }
   const normalized = list
-    .map(entry => (typeof entry === 'string' ? entry.trim() : ''))
-    .filter(entry => entry.length > 0);
+    .map((entry) => (typeof entry === "string" ? entry.trim() : ""))
+    .filter((entry) => entry.length > 0);
   const unique = Array.from(new Set(normalized));
   unique.sort();
   return unique;
@@ -95,13 +95,15 @@ function normalizeSelection(input: DailyWealthSelection): DailyWealthSelection {
   const range = normalizeRange(input.range ?? null);
 
   if (date && range) {
-    throw new Error('loadDailyWealth: date und range können nicht gleichzeitig gesetzt werden');
+    throw new Error(
+      "loadDailyWealth: date und range können nicht gleichzeitig gesetzt werden",
+    );
   }
   if (!date && !range) {
-    throw new Error('loadDailyWealth: entweder date oder range erforderlich');
+    throw new Error("loadDailyWealth: entweder date oder range erforderlich");
   }
 
-  const scopes: DailyWealthRequest['scopes'] = input.scopes ?? {};
+  const scopes: DailyWealthRequest["scopes"] = input.scopes ?? {};
   const accounts = normalizeScopeList(scopes.accounts);
   const portfolios = normalizeScopeList(scopes.portfolios);
 
@@ -117,9 +119,13 @@ function normalizeSelection(input: DailyWealthSelection): DailyWealthSelection {
   }
 
   const includeSlices =
-    (input as { include_slices?: boolean }).include_slices ?? input.includeSlices ?? undefined;
+    (input as { include_slices?: boolean }).include_slices ??
+    input.includeSlices ??
+    undefined;
   const includeScopes =
-    (input as { include_scopes?: boolean }).include_scopes ?? input.includeScopes ?? undefined;
+    (input as { include_scopes?: boolean }).include_scopes ??
+    input.includeScopes ??
+    undefined;
 
   if (includeSlices !== undefined) {
     normalizedSelection.includeSlices = includeSlices;
@@ -138,10 +144,18 @@ function normalizeSelection(input: DailyWealthSelection): DailyWealthSelection {
     }
   }
 
-  if (typeof input.limit === 'number' && Number.isFinite(input.limit) && input.limit > 0) {
+  if (
+    typeof input.limit === "number" &&
+    Number.isFinite(input.limit) &&
+    input.limit > 0
+  ) {
     normalizedSelection.limit = input.limit;
   }
-  if (typeof input.offset === 'number' && Number.isFinite(input.offset) && input.offset >= 0) {
+  if (
+    typeof input.offset === "number" &&
+    Number.isFinite(input.offset) &&
+    input.offset >= 0
+  ) {
     normalizedSelection.offset = input.offset;
   }
 
@@ -149,17 +163,31 @@ function normalizeSelection(input: DailyWealthSelection): DailyWealthSelection {
 }
 
 function serializeSelection(selection: DailyWealthSelection): string {
-  const datePart = selection.date ?? '';
-  const rangePart = selection.range ? `${selection.range.start}..${selection.range.end}` : '';
+  const datePart = selection.date ?? "";
+  const rangePart = selection.range
+    ? `${selection.range.start}..${selection.range.end}`
+    : "";
   const scopeAccounts = selection.scopes?.accounts ?? [];
   const scopePortfolios = selection.scopes?.portfolios ?? [];
-  const scopePart = JSON.stringify({ accounts: scopeAccounts, portfolios: scopePortfolios });
-  const includeSlices = selection.includeSlices ? '1' : '0';
-  const includeScopes = selection.includeScopes ? '1' : '0';
-  const limit = selection.limit ?? '';
-  const offset = selection.offset ?? '';
-  const metricsStart = selection.metrics_start ?? '';
-  return [datePart, rangePart, scopePart, includeSlices, includeScopes, limit, offset, metricsStart].join('::');
+  const scopePart = JSON.stringify({
+    accounts: scopeAccounts,
+    portfolios: scopePortfolios,
+  });
+  const includeSlices = selection.includeSlices ? "1" : "0";
+  const includeScopes = selection.includeScopes ? "1" : "0";
+  const limit = selection.limit ?? "";
+  const offset = selection.offset ?? "";
+  const metricsStart = selection.metrics_start ?? "";
+  return [
+    datePart,
+    rangePart,
+    scopePart,
+    includeSlices,
+    includeScopes,
+    limit,
+    offset,
+    metricsStart,
+  ].join("::");
 }
 
 function cloneRecord(record: DailyWealthRecord): DailyWealthRecord {
@@ -167,12 +195,16 @@ function cloneRecord(record: DailyWealthRecord): DailyWealthRecord {
   return cloned;
 }
 
-function cloneScopeRecord(record: DailyWealthScopeRecord): DailyWealthScopeRecord {
+function cloneScopeRecord(
+  record: DailyWealthScopeRecord,
+): DailyWealthScopeRecord {
   const cloned: DailyWealthScopeRecord = { ...record };
   return cloned;
 }
 
-function cloneSlices(slices: DailyWealthSlices | undefined): DailyWealthSlices | undefined {
+function cloneSlices(
+  slices: DailyWealthSlices | undefined,
+): DailyWealthSlices | undefined {
   if (!slices) {
     return undefined;
   }
@@ -182,7 +214,9 @@ function cloneSlices(slices: DailyWealthSlices | undefined): DailyWealthSlices |
   };
 }
 
-function cloneResponse(response: DailyWealthResponse | null): DailyWealthResponse | null {
+function cloneResponse(
+  response: DailyWealthResponse | null,
+): DailyWealthResponse | null {
   if (!response) {
     return null;
   }
@@ -195,7 +229,9 @@ function cloneResponse(response: DailyWealthResponse | null): DailyWealthRespons
   };
 }
 
-function cloneSelection(selection: DailyWealthSelection | null): DailyWealthSelection | null {
+function cloneSelection(
+  selection: DailyWealthSelection | null,
+): DailyWealthSelection | null {
   if (!selection) {
     return null;
   }
@@ -211,8 +247,12 @@ function cloneSelection(selection: DailyWealthSelection | null): DailyWealthSele
   }
   if (selection.scopes) {
     cloned.scopes = {
-      ...(selection.scopes.accounts ? { accounts: [...selection.scopes.accounts] } : {}),
-      ...(selection.scopes.portfolios ? { portfolios: [...selection.scopes.portfolios] } : {}),
+      ...(selection.scopes.accounts
+        ? { accounts: [...selection.scopes.accounts] }
+        : {}),
+      ...(selection.scopes.portfolios
+        ? { portfolios: [...selection.scopes.portfolios] }
+        : {}),
     };
   }
   if (selection.includeSlices !== undefined) {
@@ -239,7 +279,7 @@ function setState(next: Partial<DailyWealthState>): void {
 
 export function resetDailyWealthState(): void {
   state = {
-    status: 'idle',
+    status: "idle",
     error: null,
     data: null,
     selection: null,
@@ -275,7 +315,7 @@ export async function loadDailyWealth(
   }
 
   setState({
-    status: 'loading',
+    status: "loading",
     error: null,
     selection,
   });
@@ -284,7 +324,7 @@ export async function loadDailyWealth(
     const response = await fetchDailyWealthWS(hass, panelConfig, selection);
     lastRequestKey = requestKey;
     setState({
-      status: 'loaded',
+      status: "loaded",
       error: null,
       data: response,
       selection,
@@ -292,7 +332,7 @@ export async function loadDailyWealth(
     });
   } catch (error) {
     setState({
-      status: 'error',
+      status: "error",
       error: toErrorMessage(error),
       selection,
       lastUpdated: Date.now(),

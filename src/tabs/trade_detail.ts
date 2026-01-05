@@ -8,27 +8,32 @@
  * - "Copy prompt for ChatGPT" functionality.
  * - Info bar showing change in the selected range period.
  */
-import type { LineChartMarker, LineChartOptions } from '../content/charting';
-import { renderLineChart, updateLineChart } from '../content/charting';
+import type { LineChartMarker, LineChartOptions } from "../content/charting";
+import { renderLineChart, updateLineChart } from "../content/charting";
 import {
   createHeaderCard,
   createInlineSpinner,
   formatNumber,
-} from '../content/elements';
+} from "../content/elements";
 import type {
   NewsPromptResponse,
   RealizedTrade,
   SecurityHistoryOptions,
-  SecurityHistoryTransaction
-} from '../data/api';
+  SecurityHistoryTransaction,
+} from "../data/api";
 import {
   fetchNewsPromptWS,
   fetchRealizedPerformance,
-  fetchSecurityHistoryWS
-} from '../data/api';
-import type { HomeAssistant } from '../types/home-assistant';
-import { escapeAttribute, escapeHtml } from '../utils/html';
-import type { DashboardTabRenderFn, PanelConfigLike, SecurityHistoryRangeKey, SecurityHistoryRangeState } from './types';
+  fetchSecurityHistoryWS,
+} from "../data/api";
+import type { HomeAssistant } from "../types/home-assistant";
+import { escapeAttribute, escapeHtml } from "../utils/html";
+import type {
+  DashboardTabRenderFn,
+  PanelConfigLike,
+  SecurityHistoryRangeKey,
+  SecurityHistoryRangeState,
+} from "./types";
 
 // --- Types & Constants matching Security Detail ---
 
@@ -38,45 +43,51 @@ interface NormalizedHistoryEntry {
 }
 
 type HistoryPlaceholderState =
-  | { status: 'loaded' }
-  | { status: 'empty' }
-  | { status: 'error'; message?: string };
+  | { status: "loaded" }
+  | { status: "empty" }
+  | { status: "error"; message?: string };
 
 const PRICE_FRACTION_DIGITS = { min: 2, max: 4 } as const;
 const HOLDINGS_FRACTION_DIGITS = { min: 0, max: 6 } as const;
 
-const DEFAULT_HISTORY_RANGE: SecurityHistoryRangeKey = '1Y';
+const DEFAULT_HISTORY_RANGE: SecurityHistoryRangeKey = "1Y";
 const AVAILABLE_HISTORY_RANGES: readonly SecurityHistoryRangeKey[] = [
-  '1M',
-  '6M',
-  '1Y',
-  '5Y',
-  'ALL',
+  "1M",
+  "6M",
+  "1Y",
+  "5Y",
+  "ALL",
 ];
 const RANGE_DAY_COUNTS: Record<SecurityHistoryRangeKey, number> = {
-  '1M': 30,
-  '6M': 182,
-  '1Y': 365,
-  '5Y': 1826,
-  'ALL': Number.POSITIVE_INFINITY, // 'ALL' handled separately
+  "1M": 30,
+  "6M": 182,
+  "1Y": 365,
+  "5Y": 1826,
+  ALL: Number.POSITIVE_INFINITY, // 'ALL' handled separately
 };
 
 const PURCHASE_TYPES = new Set([0, 2]);
 const SALE_TYPES = new Set([1, 3]);
-const MARKER_COLOR_PURCHASE = 'var(--pp-reader-chart-marker-buy, #2e7d32)';
-const MARKER_COLOR_SALE = 'var(--pp-reader-chart-marker-sell, #c0392b)';
-const NEWS_PROMPT_PLACEHOLDER_FALLBACK = '{TICKER}';
-const NEWS_PROMPT_FALLBACK_LINK = 'https://chatgpt.com/';
+const MARKER_COLOR_PURCHASE = "var(--pp-reader-chart-marker-buy, #2e7d32)";
+const MARKER_COLOR_SALE = "var(--pp-reader-chart-marker-sell, #c0392b)";
+const NEWS_PROMPT_PLACEHOLDER_FALLBACK = "{TICKER}";
+const NEWS_PROMPT_FALLBACK_LINK = "https://chatgpt.com/";
 
 // --- Local Caches (Module Scope to persist state across renders) ---
 
-const SECURITY_HISTORY_CACHE = new Map<string, Map<SecurityHistoryRangeKey, NormalizedHistoryEntry[]>>();
+const SECURITY_HISTORY_CACHE = new Map<
+  string,
+  Map<SecurityHistoryRangeKey, NormalizedHistoryEntry[]>
+>();
 const SECURITY_HISTORY_MARKER_CACHE = new Map<
   string,
   Map<SecurityHistoryRangeKey, LineChartMarker[]>
 >();
 const RANGE_STATE_REGISTRY = new Map<string, SecurityHistoryRangeState>();
-const HISTORY_CHART_INSTANCES = new WeakMap<HTMLElement, ReturnType<typeof renderLineChart>>();
+const HISTORY_CHART_INSTANCES = new WeakMap<
+  HTMLElement,
+  ReturnType<typeof renderLineChart>
+>();
 
 export const __TEST_ONLY__ = {
   buildTradeMetaCard,
@@ -84,7 +95,9 @@ export const __TEST_ONLY__ = {
 
 // --- Helper Functions Copied/Adapted from security_detail.ts ---
 
-function ensureHistoryCache(securityUuid: string): Map<SecurityHistoryRangeKey, NormalizedHistoryEntry[]> {
+function ensureHistoryCache(
+  securityUuid: string,
+): Map<SecurityHistoryRangeKey, NormalizedHistoryEntry[]> {
   let cache = SECURITY_HISTORY_CACHE.get(securityUuid);
   if (!cache) {
     cache = new Map();
@@ -93,7 +106,9 @@ function ensureHistoryCache(securityUuid: string): Map<SecurityHistoryRangeKey, 
   return cache;
 }
 
-function ensureHistoryMarkerCache(securityUuid: string): Map<SecurityHistoryRangeKey, LineChartMarker[]> {
+function ensureHistoryMarkerCache(
+  securityUuid: string,
+): Map<SecurityHistoryRangeKey, LineChartMarker[]> {
   let cache = SECURITY_HISTORY_MARKER_CACHE.get(securityUuid);
   if (!cache) {
     cache = new Map();
@@ -102,7 +117,10 @@ function ensureHistoryMarkerCache(securityUuid: string): Map<SecurityHistoryRang
   return cache;
 }
 
-function setActiveRange(securityUuid: string, rangeKey: SecurityHistoryRangeKey): void {
+function setActiveRange(
+  securityUuid: string,
+  rangeKey: SecurityHistoryRangeKey,
+): void {
   const state = RANGE_STATE_REGISTRY.get(securityUuid);
   if (state) {
     state.activeRange = rangeKey;
@@ -112,7 +130,9 @@ function setActiveRange(securityUuid: string, rangeKey: SecurityHistoryRangeKey)
 }
 
 function getActiveRange(securityUuid: string): SecurityHistoryRangeKey {
-  return RANGE_STATE_REGISTRY.get(securityUuid)?.activeRange ?? DEFAULT_HISTORY_RANGE;
+  return (
+    RANGE_STATE_REGISTRY.get(securityUuid)?.activeRange ?? DEFAULT_HISTORY_RANGE
+  );
 }
 
 function normaliseDate(date: Date): Date {
@@ -139,8 +159,9 @@ function toHistoryDateCode(date: Date): number | null {
 
 function parseHistoryDate(raw: unknown): Date | null {
   if (!raw) return null;
-  if (raw instanceof Date) return Number.isNaN(raw.getTime()) ? null : new Date(raw.getTime());
-  if (typeof raw === 'number' && Number.isFinite(raw)) {
+  if (raw instanceof Date)
+    return Number.isNaN(raw.getTime()) ? null : new Date(raw.getTime());
+  if (typeof raw === "number" && Number.isFinite(raw)) {
     const integerValue = Math.trunc(raw);
     if (integerValue >= 1_000_000 && integerValue <= 99_999_999) {
       const year = Math.floor(integerValue / 10_000);
@@ -151,13 +172,15 @@ function parseHistoryDate(raw: unknown): Date | null {
     }
     if (integerValue >= 0 && integerValue <= 100_000) {
       const candidate = new Date(integerValue * 86400000);
-      return Number.isNaN(candidate.getTime()) ? null : normaliseDate(candidate);
+      return Number.isNaN(candidate.getTime())
+        ? null
+        : normaliseDate(candidate);
     }
     if (integerValue > 1e12) return new Date(integerValue);
     if (integerValue > 1e9) return new Date(integerValue * 1000);
     return null;
   }
-  if (typeof raw === 'string') {
+  if (typeof raw === "string") {
     const trimmed = raw.trim();
     if (/^\d{1,6}$/.test(trimmed)) {
       const numeric = Number.parseInt(trimmed, 10);
@@ -176,8 +199,8 @@ function parseHistoryDate(raw: unknown): Date | null {
 }
 
 function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return value;
-  if (typeof value === 'string') {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string") {
     const parsed = parseFloat(value);
     return Number.isFinite(parsed) ? parsed : null;
   }
@@ -185,11 +208,11 @@ function toFiniteNumber(value: unknown): number | null {
 }
 
 function isFiniteNumber(value: unknown): value is number {
-  return typeof value === 'number' && Number.isFinite(value);
+  return typeof value === "number" && Number.isFinite(value);
 }
 
 function toNonEmptyTrimmedString(value: unknown): string | null {
-  if (typeof value !== 'string') return null;
+  if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed ? trimmed : null;
 }
@@ -244,7 +267,7 @@ function normaliseHistorySeries(prices: unknown): NormalizedHistoryEntry[] {
 function parseTransactionDate(raw: unknown): Date | null {
   const parsed = parseHistoryDate(raw);
   if (parsed) return parsed;
-  if (typeof raw === 'string') {
+  if (typeof raw === "string") {
     const trimmed = raw.trim();
     if (!trimmed) return null;
     const isoParsed = Date.parse(trimmed);
@@ -255,8 +278,8 @@ function parseTransactionDate(raw: unknown): Date | null {
 
 function formatPrice(value: unknown): string {
   const numeric = toFiniteNumber(value);
-  if (numeric == null) return '—';
-  return numeric.toLocaleString('de-DE', {
+  if (numeric == null) return "—";
+  return numeric.toLocaleString("de-DE", {
     minimumFractionDigits: PRICE_FRACTION_DIGITS.min,
     maximumFractionDigits: PRICE_FRACTION_DIGITS.max,
   });
@@ -264,9 +287,9 @@ function formatPrice(value: unknown): string {
 
 function formatHoldings(value: unknown): string {
   const numeric = toFiniteNumber(value);
-  if (numeric == null) return '—';
+  if (numeric == null) return "—";
   const hasFraction = Math.abs(numeric % 1) > 0;
-  return numeric.toLocaleString('de-DE', {
+  return numeric.toLocaleString("de-DE", {
     minimumFractionDigits: hasFraction ? 2 : HOLDINGS_FRACTION_DIGITS.min,
     maximumFractionDigits: hasFraction
       ? HOLDINGS_FRACTION_DIGITS.max
@@ -282,10 +305,10 @@ function normaliseTransactionMarkers(
 
   const markers: LineChartMarker[] = [];
   const securityCurrency = toUppercaseCode(fallbackCurrency);
-  const defaultCurrency = securityCurrency || 'EUR';
+  const defaultCurrency = securityCurrency || "EUR";
 
   (transactions as SecurityHistoryTransaction[]).forEach((tx, index) => {
-    const typeValue = typeof tx.type === 'number' ? tx.type : Number(tx.type);
+    const typeValue = typeof tx.type === "number" ? tx.type : Number(tx.type);
     const isPurchase = PURCHASE_TYPES.has(typeValue);
     const isSale = SALE_TYPES.has(typeValue);
     if (!isPurchase && !isSale) return;
@@ -299,8 +322,8 @@ function normaliseTransactionMarkers(
     const shares = toFiniteNumber(tx.shares);
     const netPriceEur = toFiniteNumber(tx.net_price_eur);
 
-    const typeLabel = isPurchase ? 'Kauf' : 'Verkauf';
-    const sharesPart = shares != null ? `${formatHoldings(shares)} @ ` : '';
+    const typeLabel = isPurchase ? "Kauf" : "Verkauf";
+    const sharesPart = shares != null ? `${formatHoldings(shares)} @ ` : "";
     const baseLabel = `${typeLabel} ${sharesPart}${formatPrice(price)} ${currency}`;
     const label =
       isSale && netPriceEur != null
@@ -309,7 +332,7 @@ function normaliseTransactionMarkers(
 
     const color = isPurchase ? MARKER_COLOR_PURCHASE : MARKER_COLOR_SALE;
     const markerId =
-      (typeof tx.uuid === 'string' && tx.uuid.trim()) ||
+      (typeof tx.uuid === "string" && tx.uuid.trim()) ||
       `${typeLabel}-${parsedDate.getTime().toString()}-${index.toString()}`;
 
     markers.push({
@@ -336,11 +359,11 @@ function normaliseTransactionMarkers(
 function resolveRoundedTrendClass(
   value: number | null | undefined,
   decimals: number,
-): 'positive' | 'negative' | 'neutral' {
-  if (!isFiniteNumber(value) || value === 0) return 'neutral';
+): "positive" | "negative" | "neutral" {
+  if (!isFiniteNumber(value) || value === 0) return "neutral";
   const threshold = 0.5 / Math.pow(10, decimals);
-  if (Math.abs(value) < threshold) return 'neutral';
-  return value > 0 ? 'positive' : 'negative';
+  if (Math.abs(value) < threshold) return "neutral";
+  return value > 0 ? "positive" : "negative";
 }
 
 function formatPriceChangeValue(
@@ -349,9 +372,9 @@ function formatPriceChangeValue(
 ): string {
   if (!isFiniteNumber(value)) return '<span class="value neutral">—</span>';
   const formatted = formatPrice(value);
-  if (formatted === '—') return '<span class="value neutral">—</span>';
+  if (formatted === "—") return '<span class="value neutral">—</span>';
   const trendClass = resolveRoundedTrendClass(value, PRICE_FRACTION_DIGITS.max);
-  const suffix = currency ? `&nbsp;${escapeHtml(currency)}` : '';
+  const suffix = currency ? `&nbsp;${escapeHtml(currency)}` : "";
   return `<span class="value ${trendClass}">${formatted}${suffix}</span>`;
 }
 
@@ -361,8 +384,12 @@ function formatPercentageChangeValue(value: number | null): string {
   return `<span class="value ${trendClass} value--percentage">${formatNumber(value)}&nbsp;%</span>`;
 }
 
-function computePercentageChange(current: number | null, reference: number | null): number | null {
-  if (!isFiniteNumber(reference) || reference === 0 || !isFiniteNumber(current)) return null;
+function computePercentageChange(
+  current: number | null,
+  reference: number | null,
+): number | null {
+  if (!isFiniteNumber(reference) || reference === 0 || !isFiniteNumber(current))
+    return null;
   return ((current - reference) / reference) * 100;
 }
 
@@ -370,16 +397,19 @@ function computePriceChangeMetrics(
   historySeries: readonly NormalizedHistoryEntry[],
   lastPrice: number | null,
 ): { priceChange: number | null; priceChangePct: number | null } {
-  if (historySeries.length === 0) return { priceChange: null, priceChangePct: null };
+  if (historySeries.length === 0)
+    return { priceChange: null, priceChangePct: null };
   const firstEntry = historySeries[0];
   const baseline = toFiniteNumber(firstEntry.close);
-  if (!isFiniteNumber(baseline) || baseline === 0) return { priceChange: null, priceChangePct: null };
+  if (!isFiniteNumber(baseline) || baseline === 0)
+    return { priceChange: null, priceChangePct: null };
 
   const lastEntry = historySeries[historySeries.length - 1];
   const fallbackLast = toFiniteNumber(lastEntry.close);
   const effectiveLast = toFiniteNumber(lastPrice) ?? fallbackLast;
 
-  if (!isFiniteNumber(effectiveLast)) return { priceChange: null, priceChangePct: null };
+  if (!isFiniteNumber(effectiveLast))
+    return { priceChange: null, priceChangePct: null };
 
   const rawDelta = effectiveLast - baseline;
   const priceChange = Object.is(rawDelta, -0) ? 0 : rawDelta;
@@ -395,7 +425,7 @@ function buildInfoBar(
   currency: string | null | undefined,
 ): string {
   const rangeLabel = rangeKey;
-  const rangeCaption = rangeLabel.length > 0 ? rangeLabel : 'Zeitraum';
+  const rangeCaption = rangeLabel.length > 0 ? rangeLabel : "Zeitraum";
   return `
     <div class="security-info-bar" data-range="${escapeAttribute(rangeLabel)}">
       <div class="security-info-item">
@@ -411,13 +441,13 @@ function buildInfoBar(
 
 function buildRangeSelector(activeRange: SecurityHistoryRangeKey): string {
   const buttons = AVAILABLE_HISTORY_RANGES.map((rangeKey) => {
-    const activeClass = rangeKey === activeRange ? ' active' : '';
+    const activeClass = rangeKey === activeRange ? " active" : "";
     return `
       <button
         type="button"
         class="security-range-button${activeClass}"
         data-range="${escapeAttribute(rangeKey)}"
-        aria-pressed="${rangeKey === activeRange ? 'true' : 'false'}"
+        aria-pressed="${rangeKey === activeRange ? "true" : "false"}"
       >
         ${escapeHtml(rangeKey)}
       </button>
@@ -425,28 +455,31 @@ function buildRangeSelector(activeRange: SecurityHistoryRangeKey): string {
   });
   return `
     <div class="security-range-selector" role="group" aria-label="Zeitraum">
-      ${buttons.join('\n')}
+      ${buttons.join("\n")}
     </div>
   `;
 }
 
-function formatErrorLabel(error: unknown, fallback = 'Unbekannter Fehler'): string {
-  if (typeof error === 'string') return error.trim() || fallback;
+function formatErrorLabel(
+  error: unknown,
+  fallback = "Unbekannter Fehler",
+): string {
+  if (typeof error === "string") return error.trim() || fallback;
   if (error instanceof Error) return error.message.trim() || fallback;
   return fallback;
 }
 
 function buildHistoryPlaceholder(
   rangeKey: SecurityHistoryRangeKey,
-  state: HistoryPlaceholderState = { status: 'empty' },
+  state: HistoryPlaceholderState = { status: "empty" },
 ): string {
   const safeRange = escapeAttribute(rangeKey);
   switch (state.status) {
-    case 'loaded':
+    case "loaded":
       return `<div class="history-chart" data-state="loaded" data-range="${safeRange}" role="img"></div>`;
-    case 'error':
+    case "error":
       return `<div class="history-placeholder" data-state="error"><p>${escapeHtml(formatErrorLabel(state.message))}</p></div>`;
-    case 'empty':
+    case "empty":
     default:
       return `<div class="history-placeholder" data-state="empty"><p>Keine historischen Daten verfügbar.</p></div>`;
   }
@@ -464,21 +497,31 @@ function getHistoryChartOptions(
   const measuredWidth = host.clientWidth || host.offsetWidth || 0;
   const width = measuredWidth > 0 ? measuredWidth : 640;
   const height = Math.min(Math.max(Math.floor(width * 0.5), 240), 440);
-  const safeCurrency = (options.currency || '').toUpperCase() || 'EUR';
-  const baselineValue = isFiniteNumber(options.baseline) ? options.baseline : null;
+  const safeCurrency = (options.currency || "").toUpperCase() || "EUR";
+  const baselineValue = isFiniteNumber(options.baseline)
+    ? options.baseline
+    : null;
   const marginLeft = Math.max(48, Math.min(72, Math.round(width * 0.075)));
 
   return {
     width,
     height,
-    margin: { top: 18, right: Math.max(28, Math.round(width * 0.05)), bottom: 40, left: marginLeft },
+    margin: {
+      top: 18,
+      right: Math.max(28, Math.round(width * 0.05)),
+      bottom: 40,
+      left: marginLeft,
+    },
     series,
     yFormatter: (value) => formatPrice(value),
     tooltipRenderer: ({ xFormatted, yFormatted }) => `
       <div class="chart-tooltip-date">${escapeHtml(xFormatted)}</div>
       <div class="chart-tooltip-value">${escapeHtml(yFormatted)}&nbsp;${escapeHtml(safeCurrency)}</div>
     `,
-    baseline: baselineValue != null ? { value: baselineValue, includeInDomain: false } : null,
+    baseline:
+      baselineValue != null
+        ? { value: baselineValue, includeInDomain: false }
+        : null,
     markers: Array.isArray(options.markers) ? options.markers : [],
   };
 }
@@ -486,13 +529,17 @@ function getHistoryChartOptions(
 function renderHistoryChart(
   host: HTMLElement,
   series: readonly NormalizedHistoryEntry[],
-  options: { currency?: string | null; baseline?: number | null; markers?: readonly LineChartMarker[] } = {},
+  options: {
+    currency?: string | null;
+    baseline?: number | null;
+    markers?: readonly LineChartMarker[];
+  } = {},
 ): void {
   if (series.length === 0) return;
   const chartOptions = getHistoryChartOptions(host, series, options);
   let chartContainer = HISTORY_CHART_INSTANCES.get(host) ?? null;
   if (!chartContainer || !host.contains(chartContainer)) {
-    host.innerHTML = '';
+    host.innerHTML = "";
     chartContainer = renderLineChart(host, chartOptions);
     if (chartContainer) HISTORY_CHART_INSTANCES.set(host, chartContainer);
     return;
@@ -501,8 +548,6 @@ function renderHistoryChart(
 }
 
 // --- Trade Specific UI ---
-
-
 
 function buildTradeMetaCard(trade: RealizedTrade): string {
   // Letzter Verkaufspreis Calculation
@@ -515,7 +560,9 @@ function buildTradeMetaCard(trade: RealizedTrade): string {
 
   if (trade.lots.length > 0) {
     // Sort lots by date to ensure we pick the last one
-    const sortedLots = [...trade.lots].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const sortedLots = [...trade.lots].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime(),
+    );
     const lastLot = sortedLots[sortedLots.length - 1];
 
     grossNative = toFiniteNumber(lastLot.sell_price_native) ?? null;
@@ -545,16 +592,16 @@ function buildTradeMetaCard(trade: RealizedTrade): string {
   let line1Curr = currency;
   if (!isFiniteNumber(line1Value)) {
     line1Value = grossEur;
-    line1Curr = 'EUR';
-  } else if (currency === 'EUR') {
+    line1Curr = "EUR";
+  } else if (currency === "EUR") {
     line1Value = grossEur; // Ensure consistency
-    line1Curr = 'EUR';
+    line1Curr = "EUR";
   }
 
   if (isFiniteNumber(line1Value)) {
-    let line1Html = `${formatPrice(line1Value)} ${line1Curr ? escapeHtml(line1Curr) : ''}`;
+    let line1Html = `${formatPrice(line1Value)} ${line1Curr ? escapeHtml(line1Curr) : ""}`;
 
-    const isFx = line1Curr !== 'EUR';
+    const isFx = line1Curr !== "EUR";
 
     if (!isFx && isFiniteNumber(netEur)) {
       line1Html += ` <span class="secondary-text" style="font-size: 0.85em; opacity: 0.8;">(Netto: ${formatPrice(netEur)} EUR)</span>`;
@@ -566,28 +613,34 @@ function buildTradeMetaCard(trade: RealizedTrade): string {
 
   // Line 2: [Gross Eur] EUR (only if different from Line 1)
   // Logic: Show if Line 1 was Non-EUR.
-  if (line1Curr !== 'EUR' && isFiniteNumber(grossEur) && isFiniteNumber(line1Value)) {
+  if (
+    line1Curr !== "EUR" &&
+    isFiniteNumber(grossEur) &&
+    isFiniteNumber(line1Value)
+  ) {
     let line2Html = `${formatPrice(grossEur)} €`;
 
     if (isFiniteNumber(netEur)) {
       line2Html += ` <span class="secondary-text" style="font-size: 0.85em; opacity: 0.8;">(Netto: ${formatPrice(netEur)} EUR)</span>`;
     }
 
-    values.push(`<span class="value value--average value--average-eur" style="display: block; font-size: 0.85em; margin-top: 2px;">${line2Html}</span>`);
+    values.push(
+      `<span class="value value--average value--average-eur" style="display: block; font-size: 0.85em; margin-top: 2px;">${line2Html}</span>`,
+    );
   }
 
-  const lastSellPriceDisplay = values.join('');
+  const lastSellPriceDisplay = values.join("");
 
   // Letzter Preis (aktueller Marktpreis wenn verfügbar)
   const currentPrice = toFiniteNumber(trade.current_price);
-  let currentPriceDisplay = '—';
+  let currentPriceDisplay = "—";
   if (currentPrice != null) {
-    currentPriceDisplay = `${formatPrice(currentPrice)} ${currency ? escapeHtml(currency) : ''}`;
+    currentPriceDisplay = `${formatPrice(currentPrice)} ${currency ? escapeHtml(currency) : ""}`;
   }
 
   const changeAbs = toFiniteNumber(trade.since_sell_abs);
   const changePct = toFiniteNumber(trade.since_sell_pct);
-  let changeDisplay = '';
+  let changeDisplay = "";
   if (changeAbs != null && changePct != null) {
     const absClass = resolveRoundedTrendClass(changeAbs, 2);
     const pctClass = resolveRoundedTrendClass(changePct, 2);
@@ -631,10 +684,15 @@ function updateInfoBarContent(
   priceChangePct: number | null,
   currency: string | null | undefined,
 ): void {
-  const infoBar = root.querySelector('.security-info-bar');
+  const infoBar = root.querySelector(".security-info-bar");
   if (!infoBar || !infoBar.parentElement) return;
-  const wrapper = document.createElement('div');
-  wrapper.innerHTML = buildInfoBar(rangeKey, priceChange, priceChangePct, currency).trim();
+  const wrapper = document.createElement("div");
+  wrapper.innerHTML = buildInfoBar(
+    rangeKey,
+    priceChange,
+    priceChangePct,
+    currency,
+  ).trim();
   const fresh = wrapper.firstElementChild;
   if (fresh) infoBar.parentElement.replaceChild(fresh, infoBar);
 }
@@ -644,9 +702,15 @@ function updateHistoryPlaceholder(
   rangeKey: SecurityHistoryRangeKey,
   state: HistoryPlaceholderState,
   historySeries: readonly NormalizedHistoryEntry[],
-  options: { currency?: string | null; baseline?: number | null; markers?: readonly LineChartMarker[] } = {},
+  options: {
+    currency?: string | null;
+    baseline?: number | null;
+    markers?: readonly LineChartMarker[];
+  } = {},
 ): void {
-  const placeholderContainer = root.querySelector('.security-detail-placeholder');
+  const placeholderContainer = root.querySelector(
+    ".security-detail-placeholder",
+  );
   if (!placeholderContainer) return;
 
   placeholderContainer.innerHTML = `
@@ -654,25 +718,39 @@ function updateHistoryPlaceholder(
     ${buildHistoryPlaceholder(rangeKey, state)}
   `;
 
-  if (state.status === 'loaded' && Array.isArray(historySeries) && historySeries.length) {
-    const host = placeholderContainer.querySelector<HTMLElement>('.history-chart');
+  if (
+    state.status === "loaded" &&
+    Array.isArray(historySeries) &&
+    historySeries.length
+  ) {
+    const host =
+      placeholderContainer.querySelector<HTMLElement>(".history-chart");
     if (host) {
-      requestAnimationFrame(() => { renderHistoryChart(host, historySeries, options); });
+      requestAnimationFrame(() => {
+        renderHistoryChart(host, historySeries, options);
+      });
     }
   }
 }
 
-function updateRangeButtons(container: HTMLElement | null, activeRange: SecurityHistoryRangeKey): void {
+function updateRangeButtons(
+  container: HTMLElement | null,
+  activeRange: SecurityHistoryRangeKey,
+): void {
   if (!container) return;
-  container.querySelectorAll<HTMLButtonElement>('.security-range-button').forEach((button) => {
-    const rangeKey = button.dataset.range as SecurityHistoryRangeKey | undefined;
-    const isActive = rangeKey === activeRange;
-    button.classList.toggle('active', isActive);
-    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
-    button.disabled = false;
-    button.classList.remove('loading');
-    if (rangeKey) button.textContent = rangeKey;
-  });
+  container
+    .querySelectorAll<HTMLButtonElement>(".security-range-button")
+    .forEach((button) => {
+      const rangeKey = button.dataset.range as
+        | SecurityHistoryRangeKey
+        | undefined;
+      const isActive = rangeKey === activeRange;
+      button.classList.toggle("active", isActive);
+      button.setAttribute("aria-pressed", isActive ? "true" : "false");
+      button.disabled = false;
+      button.classList.remove("loading");
+      if (rangeKey) button.textContent = rangeKey;
+    });
 }
 
 function scheduleRangeSetup(options: {
@@ -683,10 +761,13 @@ function scheduleRangeSetup(options: {
   currencyCode?: string;
   baseline?: number | null;
 }): void {
-  const { root, hass, panelConfig, securityUuid, currencyCode, baseline } = options;
+  const { root, hass, panelConfig, securityUuid, currencyCode, baseline } =
+    options;
 
   setTimeout(() => {
-    const rangeSelector = root.querySelector<HTMLElement>('.security-range-selector');
+    const rangeSelector = root.querySelector<HTMLElement>(
+      ".security-range-selector",
+    );
     if (!rangeSelector) return;
 
     // Load caches if empty
@@ -695,9 +776,17 @@ function scheduleRangeSetup(options: {
 
     const loadDataForRange = async (rangeKey: SecurityHistoryRangeKey) => {
       const rangeOptions = resolveRangeOptions(rangeKey);
-      const historyResponse = await fetchSecurityHistoryWS(hass, panelConfig, securityUuid, rangeOptions);
+      const historyResponse = await fetchSecurityHistoryWS(
+        hass,
+        panelConfig,
+        securityUuid,
+        rangeOptions,
+      );
       const historySeries = normaliseHistorySeries(historyResponse.prices);
-      const markers = normaliseTransactionMarkers(historyResponse.transactions, currencyCode);
+      const markers = normaliseTransactionMarkers(
+        historyResponse.transactions,
+        currencyCode,
+      );
       cache.set(rangeKey, historySeries);
       markerCache.set(rangeKey, markers);
       return { historySeries, markers };
@@ -706,12 +795,23 @@ function scheduleRangeSetup(options: {
     const display = (rangeKey: SecurityHistoryRangeKey) => {
       const historySeries = cache.get(rangeKey) ?? [];
       const markers = markerCache.get(rangeKey) ?? [];
-      const state: HistoryPlaceholderState = historySeries.length ? { status: 'loaded' } : { status: 'empty' };
-      const { priceChange, priceChangePct } = computePriceChangeMetrics(historySeries, baseline ?? null); // Use baseline as proxy for last price if needed, or calc from series
+      const state: HistoryPlaceholderState = historySeries.length
+        ? { status: "loaded" }
+        : { status: "empty" };
+      const { priceChange, priceChangePct } = computePriceChangeMetrics(
+        historySeries,
+        baseline ?? null,
+      ); // Use baseline as proxy for last price if needed, or calc from series
 
       setActiveRange(securityUuid, rangeKey);
       updateRangeButtons(rangeSelector, rangeKey);
-      updateInfoBarContent(root, rangeKey, priceChange, priceChangePct, currencyCode);
+      updateInfoBarContent(
+        root,
+        rangeKey,
+        priceChange,
+        priceChangePct,
+        currencyCode,
+      );
       updateHistoryPlaceholder(root, rangeKey, state, historySeries, {
         currency: currencyCode,
         baseline: baseline ?? undefined,
@@ -721,17 +821,21 @@ function scheduleRangeSetup(options: {
 
     // Initial display handled by main render, this is for interaction
 
-    rangeSelector.addEventListener('click', (event) => {
+    rangeSelector.addEventListener("click", (event) => {
       void (async () => {
-        const button = (event.target as HTMLElement).closest<HTMLButtonElement>('.security-range-button');
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>(
+          ".security-range-button",
+        );
         if (!button || button.disabled) return;
 
-        const rangeKey = button.dataset.range as SecurityHistoryRangeKey | undefined;
+        const rangeKey = button.dataset.range as
+          | SecurityHistoryRangeKey
+          | undefined;
         if (!rangeKey || !AVAILABLE_HISTORY_RANGES.includes(rangeKey)) return;
         if (rangeKey === getActiveRange(securityUuid)) return;
 
         button.disabled = true;
-        button.classList.add('loading');
+        button.classList.add("loading");
         button.innerHTML = createInlineSpinner();
 
         try {
@@ -740,15 +844,20 @@ function scheduleRangeSetup(options: {
           }
           display(rangeKey);
         } catch (e) {
-          console.error('Failed to load history range', e);
+          console.error("Failed to load history range", e);
           // Fallback or error state
           setActiveRange(securityUuid, rangeKey);
           updateRangeButtons(rangeSelector, rangeKey);
-          updateHistoryPlaceholder(root, rangeKey, { status: 'error', message: 'Laden fehlgeschlagen' }, [], { currency: currencyCode });
+          updateHistoryPlaceholder(
+            root,
+            rangeKey,
+            { status: "error", message: "Laden fehlgeschlagen" },
+            [],
+            { currency: currencyCode },
+          );
         }
       })();
     });
-
   }, 0);
 }
 
@@ -756,20 +865,26 @@ function scheduleRangeSetup(options: {
 
 async function copyTextToClipboard(text: string): Promise<boolean> {
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
-  if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+  if (
+    typeof navigator !== "undefined" &&
+    navigator.clipboard &&
+    typeof navigator.clipboard.writeText === "function"
+  ) {
     try {
       await navigator.clipboard.writeText(text);
       return true;
-    } catch { /* ignore */ }
+    } catch {
+      /* ignore */
+    }
   }
-  const textarea = document.createElement('textarea');
+  const textarea = document.createElement("textarea");
   textarea.value = text;
-  textarea.style.position = 'fixed';
-  textarea.style.left = '-9999px';
+  textarea.style.position = "fixed";
+  textarea.style.left = "-9999px";
   document.body.appendChild(textarea);
   textarea.select();
   // eslint-disable-next-line @typescript-eslint/no-deprecated
-  const successful = document.execCommand('copy');
+  const successful = document.execCommand("copy");
   document.body.removeChild(textarea);
   return successful;
 }
@@ -795,44 +910,57 @@ function scheduleNewsPromptSetup(options: {
   let cachedPrompt: NewsPromptResponse | null = null;
 
   const preloadPrompt = async () => {
-    try { cachedPrompt = await fetchNewsPromptWS(hass, panelConfig); } catch (e) { console.warn(e); }
+    try {
+      cachedPrompt = await fetchNewsPromptWS(hass, panelConfig);
+    } catch (e) {
+      console.warn(e);
+    }
   };
   void preloadPrompt();
 
   setTimeout(() => {
-    const button = root.querySelector<HTMLButtonElement>('.news-prompt-button');
+    const button = root.querySelector<HTMLButtonElement>(".news-prompt-button");
     if (!button) return;
 
-    button.addEventListener('click', () => {
+    button.addEventListener("click", () => {
       void (async () => {
-        const symbol = (button.dataset.symbol || tickerSymbol || '').trim();
-        if (!symbol || button.classList.contains('loading')) return;
+        const symbol = (button.dataset.symbol || tickerSymbol || "").trim();
+        if (!symbol || button.classList.contains("loading")) return;
 
         button.disabled = true;
-        button.classList.add('loading');
+        button.classList.add("loading");
         const originalText = button.textContent;
         button.innerHTML = createInlineSpinner();
-        button.append(document.createTextNode(` ${originalText || ''}`));
+        button.append(document.createTextNode(` ${originalText || ""}`));
 
         try {
-          const placeholder = (cachedPrompt?.placeholder || NEWS_PROMPT_PLACEHOLDER_FALLBACK).trim() || NEWS_PROMPT_PLACEHOLDER_FALLBACK;
-          const template = (cachedPrompt?.prompt_template || '').trim();
+          const placeholder =
+            (
+              cachedPrompt?.placeholder || NEWS_PROMPT_PLACEHOLDER_FALLBACK
+            ).trim() || NEWS_PROMPT_PLACEHOLDER_FALLBACK;
+          const template = (cachedPrompt?.prompt_template || "").trim();
           const body = template
-            ? (template.includes(placeholder) ? template.split(placeholder).join(symbol) : `${template}\n\nTicker: ${symbol}`)
+            ? template.includes(placeholder)
+              ? template.split(placeholder).join(symbol)
+              : `${template}\n\nTicker: ${symbol}`
             : `Ticker: ${symbol}`;
 
           await copyTextToClipboard(body);
-          button.textContent = '✅ Copied! Opening...';
-          await new Promise(r => setTimeout(r, 800));
+          button.textContent = "✅ Copied! Opening...";
+          await new Promise((r) => setTimeout(r, 800));
 
-          const link = (cachedPrompt?.link || '').trim() || NEWS_PROMPT_FALLBACK_LINK;
-          window.open(link, '_blank');
+          const link =
+            (cachedPrompt?.link || "").trim() || NEWS_PROMPT_FALLBACK_LINK;
+          window.open(link, "_blank");
         } catch (e) {
           console.error(e);
         } finally {
-          button.classList.remove('loading');
+          button.classList.remove("loading");
           button.disabled = false;
-          if (originalText) setTimeout(() => { button.textContent = originalText; }, 2000);
+          if (originalText)
+            setTimeout(() => {
+              button.textContent = originalText;
+            }, 2000);
         }
       })();
     });
@@ -861,7 +989,7 @@ async function renderTradeDetail(
 
   // 1. Fetch Trade Data
   const trades = await fetchRealizedPerformance(hass, panelConfig);
-  const trade = trades.find(t => t.security_uuid === securityUuid);
+  const trade = trades.find((t) => t.security_uuid === securityUuid);
 
   if (!trade) {
     return '<div class="card"><h2>Fehler</h2><p>Trade-Daten nicht gefunden.</p></div>';
@@ -875,7 +1003,7 @@ async function renderTradeDetail(
 
   let historySeries: NormalizedHistoryEntry[] = [];
   let markers: LineChartMarker[] = [];
-  let historyState: HistoryPlaceholderState = { status: 'empty' };
+  let historyState: HistoryPlaceholderState = { status: "empty" };
 
   // Check cache first
   const cache = ensureHistoryCache(securityUuid);
@@ -884,19 +1012,27 @@ async function renderTradeDetail(
   if (cache.has(activeRange)) {
     historySeries = cache.get(activeRange) ?? [];
     markers = markerCache.get(activeRange) ?? [];
-    historyState = { status: historySeries.length ? 'loaded' : 'empty' };
+    historyState = { status: historySeries.length ? "loaded" : "empty" };
   } else {
     try {
-      const historyResponse = await fetchSecurityHistoryWS(hass, panelConfig, securityUuid, rangeOptions);
+      const historyResponse = await fetchSecurityHistoryWS(
+        hass,
+        panelConfig,
+        securityUuid,
+        rangeOptions,
+      );
       historySeries = normaliseHistorySeries(historyResponse.prices);
-      markers = normaliseTransactionMarkers(historyResponse.transactions, trade.currency_code);
+      markers = normaliseTransactionMarkers(
+        historyResponse.transactions,
+        trade.currency_code,
+      );
 
       cache.set(activeRange, historySeries);
       markerCache.set(activeRange, markers);
-      historyState = { status: historySeries.length ? 'loaded' : 'empty' };
+      historyState = { status: historySeries.length ? "loaded" : "empty" };
     } catch (err) {
-      console.error('Error fetching trade history', err);
-      historyState = { status: 'error', message: formatErrorLabel(err) };
+      console.error("Error fetching trade history", err);
+      historyState = { status: "error", message: formatErrorLabel(err) };
     }
   }
 
@@ -904,16 +1040,21 @@ async function renderTradeDetail(
 
   // Header with centered name (passing name to createHeaderCard)
   // Header with centered name (passing name to createHeaderCard)
-  const headerCard = createHeaderCard(trade.name, '', {
+  const headerCard = createHeaderCard(trade.name, "", {
     includeMeta: false,
-    subtitle: 'Watchlist Details',
+    subtitle: "Watchlist Details",
   });
-  headerCard.classList.add('security-detail-header'); // Reuse security detail styling if global
+  headerCard.classList.add("security-detail-header"); // Reuse security detail styling if global
 
   const metaCard = buildTradeMetaCard(trade);
 
   const priceChangeMetrics = computePriceChangeMetrics(historySeries, null); // null -> use last entry
-  const infoBar = buildInfoBar(activeRange, priceChangeMetrics.priceChange, priceChangeMetrics.priceChangePct, trade.currency_code);
+  const infoBar = buildInfoBar(
+    activeRange,
+    priceChangeMetrics.priceChange,
+    priceChangeMetrics.priceChangePct,
+    trade.currency_code,
+  );
 
   const rangeSelector = buildRangeSelector(activeRange);
   const historyPlaceholder = buildHistoryPlaceholder(activeRange, historyState);
@@ -939,12 +1080,15 @@ async function renderTradeDetail(
   // 4. Schedule Hydration
   setTimeout(() => {
     // Initial Chart Render
-    const placeholderContainer = root.querySelector('.security-detail-placeholder .history-chart');
-    if (placeholderContainer && historyState.status === 'loaded') {
+    const placeholderContainer = root.querySelector(
+      ".security-detail-placeholder .history-chart",
+    );
+    if (placeholderContainer && historyState.status === "loaded") {
       renderHistoryChart(placeholderContainer as HTMLElement, historySeries, {
         currency: trade.currency_code,
-        baseline: toFiniteNumber(trade.last_sell_price_native) ?? trade.last_sell_price,
-        markers
+        baseline:
+          toFiniteNumber(trade.last_sell_price_native) ?? trade.last_sell_price,
+        markers,
       });
     }
 
@@ -955,7 +1099,8 @@ async function renderTradeDetail(
       panelConfig,
       securityUuid,
       currencyCode: trade.currency_code,
-      baseline: toFiniteNumber(trade.last_sell_price_native) ?? trade.last_sell_price,
+      baseline:
+        toFiniteNumber(trade.last_sell_price_native) ?? trade.last_sell_price,
     });
 
     scheduleNewsPromptSetup({
@@ -969,29 +1114,37 @@ async function renderTradeDetail(
   return content;
 }
 
-
 interface RegisterTradeDetailTabOptions {
-  setTradeDetailTabFactory?: ((
-    factory: (securityUuid: string) => {
-      title: string;
-      render: DashboardTabRenderFn;
-      cleanup: (context?: { key: string }) => void;
-    },
-  ) => void) | null;
+  setTradeDetailTabFactory?:
+    | ((
+        factory: (securityUuid: string) => {
+          title: string;
+          render: DashboardTabRenderFn;
+          cleanup: (context?: { key: string }) => void;
+        },
+      ) => void)
+    | null;
 }
 
-export function registerTradeDetailTab(options: RegisterTradeDetailTabOptions): void {
+export function registerTradeDetailTab(
+  options: RegisterTradeDetailTabOptions,
+): void {
   const { setTradeDetailTabFactory } = options;
 
-  if (typeof setTradeDetailTabFactory !== 'function') {
-    console.error('registerTradeDetailTab: Ungültige Factory-Funktion übergeben');
+  if (typeof setTradeDetailTabFactory !== "function") {
+    console.error(
+      "registerTradeDetailTab: Ungültige Factory-Funktion übergeben",
+    );
     return;
   }
 
   setTradeDetailTabFactory((securityUuid: string) => ({
-    title: 'Trade-Details',
-    render: (root: HTMLElement, hass: HomeAssistant | null | undefined, panelConfig: PanelConfigLike | null | undefined) =>
-      renderTradeDetail(root, hass, panelConfig, securityUuid),
+    title: "Trade-Details",
+    render: (
+      root: HTMLElement,
+      hass: HomeAssistant | null | undefined,
+      panelConfig: PanelConfigLike | null | undefined,
+    ) => renderTradeDetail(root, hass, panelConfig, securityUuid),
     cleanup: () => {
       // Clean up caches? Maybe keep them for user convenience when going back/forth
     },

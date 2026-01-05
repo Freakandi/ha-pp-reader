@@ -9,9 +9,9 @@ import {
   registerPanelHost,
   unregisterDashboardElement,
   unregisterPanelHost,
-} from './dashboard/registry';
-import { getEntryId } from './data/api';
-import { invalidateDailyWealthCache } from './data/dailyWealthStore';
+} from "./dashboard/registry";
+import { getEntryId } from "./data/api";
+import { invalidateDailyWealthCache } from "./data/dailyWealthStore";
 import {
   __TEST_ONLY__,
   flushPendingPositions,
@@ -20,21 +20,18 @@ import {
   handlePortfolioPositionsUpdate,
   handlePortfolioUpdate,
   reapplyPositionsSort,
-} from './data/updateConfigsWS';
-import { addSwipeEvents as addSwipeEventsUnsafe } from './interaction/tab_control';
+} from "./data/updateConfigsWS";
+import { addSwipeEvents as addSwipeEventsUnsafe } from "./interaction/tab_control";
 import {
   attachPortfolioToggleHandler,
   renderDashboard,
   updatePortfolioFooterFromDom,
-} from './tabs/overview';
-import { registerSecurityDetailTab } from './tabs/security_detail';
-import { refreshAnalyseData, renderAnalyse } from './tabs/time_series';
-import { registerTradeDetailTab } from './tabs/trade_detail';
-import { renderTrades, setOpenTradeDetail } from './tabs/trades';
-import type {
-  DashboardTabDescriptor,
-  PanelConfigLike,
-} from './tabs/types';
+} from "./tabs/overview";
+import { registerSecurityDetailTab } from "./tabs/security_detail";
+import { refreshAnalyseData, renderAnalyse } from "./tabs/time_series";
+import { registerTradeDetailTab } from "./tabs/trade_detail";
+import { renderTrades, setOpenTradeDetail } from "./tabs/trades";
+import type { DashboardTabDescriptor, PanelConfigLike } from "./tabs/types";
 import type {
   HassEvent,
   HassPanel,
@@ -42,10 +39,26 @@ import type {
   HassRoute,
   HassUnsubscribe,
   HomeAssistant,
-} from './types/home-assistant';
-import { escapeHtml } from './utils/html';
+} from "./types/home-assistant";
+import { escapeHtml } from "./utils/html";
 
-export { __TEST_ONLY__, closeSecurityDetail, closeTradeDetail, flushPendingPositions, getVisibleTabs, handlePortfolioPositionsUpdate, openSecurityDetail, openTradeDetail, reapplyPositionsSort, registerDashboardElement, registerPanelHost, setTradeDetailTabFactory, unregisterDashboardElement, unregisterPanelHost, updatePortfolioFooterFromDom };
+export {
+  __TEST_ONLY__,
+  closeSecurityDetail,
+  closeTradeDetail,
+  flushPendingPositions,
+  getVisibleTabs,
+  handlePortfolioPositionsUpdate,
+  openSecurityDetail,
+  openTradeDetail,
+  reapplyPositionsSort,
+  registerDashboardElement,
+  registerPanelHost,
+  setTradeDetailTabFactory,
+  unregisterDashboardElement,
+  unregisterPanelHost,
+  updatePortfolioFooterFromDom,
+};
 
 type AddSwipeEvents = (
   element: HTMLElement,
@@ -60,14 +73,16 @@ type PanelLike = PanelConfigLike | HassPanel | null | undefined;
 type AccountsUpdatePayload = Parameters<typeof handleAccountUpdate>[0];
 type LastFileUpdatePayload = Parameters<typeof handleLastFileUpdate>[0];
 type PortfolioValuesUpdatePayload = Parameters<typeof handlePortfolioUpdate>[0];
-type PortfolioPositionsUpdatePayload = Parameters<typeof handlePortfolioPositionsUpdate>[0];
+type PortfolioPositionsUpdatePayload = Parameters<
+  typeof handlePortfolioPositionsUpdate
+>[0];
 
 type DashboardUpdateType =
-  | 'accounts'
-  | 'last_file_update'
-  | 'portfolio_values'
-  | 'portfolio_positions'
-  | 'daily_wealth';
+  | "accounts"
+  | "last_file_update"
+  | "portfolio_values"
+  | "portfolio_positions"
+  | "daily_wealth";
 
 type DashboardUpdatePayloadMap = {
   accounts: AccountsUpdatePayload;
@@ -77,7 +92,9 @@ type DashboardUpdatePayloadMap = {
   daily_wealth: Record<string, unknown> | null;
 };
 
-type DashboardUpdateQueueEntry<T extends DashboardUpdateType = DashboardUpdateType> = {
+type DashboardUpdateQueueEntry<
+  T extends DashboardUpdateType = DashboardUpdateType,
+> = {
   type: T;
   data: DashboardUpdatePayloadMap[T] | null | undefined;
   portfolioUuid?: string | null;
@@ -100,17 +117,17 @@ interface DashboardElement extends HTMLElement {
   handleExternalRender?: (page: number) => void;
 }
 
-const STICKY_HEADER_ANCHOR_ID = 'pp-reader-sticky-anchor';
-const OVERVIEW_TAB_KEY = 'overview';
-const ANALYSE_TAB_KEY = 'analyse';
-const TRADES_TAB_KEY = 'trades';
-const SECURITY_DETAIL_TAB_PREFIX = 'security:';
-const TRADE_DETAIL_TAB_PREFIX = 'trade_detail:';
+const STICKY_HEADER_ANCHOR_ID = "pp-reader-sticky-anchor";
+const OVERVIEW_TAB_KEY = "overview";
+const ANALYSE_TAB_KEY = "analyse";
+const TRADES_TAB_KEY = "trades";
+const SECURITY_DETAIL_TAB_PREFIX = "security:";
+const TRADE_DETAIL_TAB_PREFIX = "trade_detail:";
 
 const baseTabs: DashboardTabDescriptor[] = [
-  { key: OVERVIEW_TAB_KEY, title: 'Dashboard', render: renderDashboard },
-  { key: ANALYSE_TAB_KEY, title: 'Analyse', render: renderAnalyse },
-  { key: TRADES_TAB_KEY, title: 'Trades', render: renderTrades },
+  { key: OVERVIEW_TAB_KEY, title: "Dashboard", render: renderDashboard },
+  { key: ANALYSE_TAB_KEY, title: "Analyse", render: renderAnalyse },
+  { key: TRADES_TAB_KEY, title: "Trades", render: renderTrades },
 ];
 
 const detailTabRegistry = new Map<string, DashboardTabDescriptor>();
@@ -126,29 +143,31 @@ let observer: IntersectionObserver | null = null;
 
 type DetailTabDescriptorInput = {
   title: string;
-  render: DashboardTabDescriptor['render'];
-  cleanup?: DashboardTabDescriptor['cleanup'];
+  render: DashboardTabDescriptor["render"];
+  cleanup?: DashboardTabDescriptor["cleanup"];
   key?: string;
   [key: string]: unknown;
 };
-type DetailTabFactory = (securityUuid: string) => DetailTabDescriptorInput | null | undefined;
+type DetailTabFactory = (
+  securityUuid: string,
+) => DetailTabDescriptorInput | null | undefined;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null;
+  return typeof value === "object" && value !== null;
 }
 
 function isPromiseLike<T>(value: unknown): value is PromiseLike<T> {
   return (
-    typeof value === 'object' &&
+    typeof value === "object" &&
     value !== null &&
-    typeof (value as PromiseLike<T>).then === 'function'
+    typeof (value as PromiseLike<T>).then === "function"
   );
 }
 
 function toErrorMessage(error: unknown): string {
-  if (typeof error === 'string') {
+  if (typeof error === "string") {
     const trimmed = error.trim();
-    return trimmed.length > 0 ? trimmed : 'Unbekannter Fehler';
+    return trimmed.length > 0 ? trimmed : "Unbekannter Fehler";
   }
   if (error instanceof Error) {
     const trimmed = error.message.trim();
@@ -157,7 +176,7 @@ function toErrorMessage(error: unknown): string {
   if (error != null) {
     try {
       const serialized = JSON.stringify(error);
-      if (serialized && serialized !== '{}') {
+      if (serialized && serialized !== "{}") {
         return serialized;
       }
     } catch {
@@ -169,23 +188,23 @@ function toErrorMessage(error: unknown): string {
 
 function isDashboardUpdateType(value: unknown): value is DashboardUpdateType {
   return (
-    value === 'accounts' ||
-    value === 'last_file_update' ||
-    value === 'portfolio_values' ||
-    value === 'portfolio_positions' ||
-    value === 'daily_wealth'
+    value === "accounts" ||
+    value === "last_file_update" ||
+    value === "portfolio_values" ||
+    value === "portfolio_positions" ||
+    value === "daily_wealth"
   );
 }
 
 function extractPortfolioUuidFromSingleUpdate(
   update: Record<string, unknown>,
 ): string | null {
-  const uuidCandidate = update['portfolio_uuid'];
-  if (typeof uuidCandidate === 'string' && uuidCandidate) {
+  const uuidCandidate = update["portfolio_uuid"];
+  if (typeof uuidCandidate === "string" && uuidCandidate) {
     return uuidCandidate;
   }
-  const camelCaseCandidate = update['portfolioUuid'];
-  if (typeof camelCaseCandidate === 'string' && camelCaseCandidate) {
+  const camelCaseCandidate = update["portfolioUuid"];
+  if (typeof camelCaseCandidate === "string" && camelCaseCandidate) {
     return camelCaseCandidate;
   }
   return null;
@@ -219,41 +238,49 @@ function normalizeDashboardUpdate(
   data: unknown,
 ): DashboardUpdateQueueEntry | null {
   switch (dataType) {
-    case 'accounts':
+    case "accounts":
       return {
         type: dataType,
         data: Array.isArray(data) ? (data as AccountsUpdatePayload) : null,
       };
-    case 'last_file_update':
-      if (typeof data === 'string') {
+    case "last_file_update":
+      if (typeof data === "string") {
         return { type: dataType, data: data as LastFileUpdatePayload };
       }
       if (isRecord(data)) {
         return { type: dataType, data: data as LastFileUpdatePayload };
       }
       return { type: dataType, data: null };
-    case 'portfolio_values':
+    case "portfolio_values":
       if (Array.isArray(data)) {
         return { type: dataType, data: data as PortfolioValuesUpdatePayload };
       }
       return { type: dataType, data: null };
-    case 'portfolio_positions':
+    case "portfolio_positions":
       if (Array.isArray(data)) {
-        return { type: dataType, data: data as PortfolioPositionsUpdatePayload };
+        return {
+          type: dataType,
+          data: data as PortfolioPositionsUpdatePayload,
+        };
       }
       if (isRecord(data)) {
-        return { type: dataType, data: data as PortfolioPositionsUpdatePayload };
+        return {
+          type: dataType,
+          data: data as PortfolioPositionsUpdatePayload,
+        };
       }
       return { type: dataType, data: null };
-    case 'daily_wealth':
+    case "daily_wealth":
       return { type: dataType, data: null }; // Payload ignored
     default:
       return null;
   }
 }
 
-function extractSecurityUuidFromKey(key: string | null | undefined): string | null {
-  if (typeof key !== 'string') {
+function extractSecurityUuidFromKey(
+  key: string | null | undefined,
+): string | null {
+  if (typeof key !== "string") {
     return null;
   }
   if (key.startsWith(SECURITY_DETAIL_TAB_PREFIX)) {
@@ -283,12 +310,16 @@ function getVisibleTabs(): DashboardTabDescriptor[] {
   const securityDetailTabs = detailTabOrder
     .filter((key) => key.startsWith(SECURITY_DETAIL_TAB_PREFIX))
     .map((key) => detailTabRegistry.get(key))
-    .filter((descriptor): descriptor is DashboardTabDescriptor => Boolean(descriptor));
+    .filter((descriptor): descriptor is DashboardTabDescriptor =>
+      Boolean(descriptor),
+    );
 
   const tradeDetailTabs = detailTabOrder
     .filter((key) => key.startsWith(TRADE_DETAIL_TAB_PREFIX))
     .map((key) => detailTabRegistry.get(key))
-    .filter((descriptor): descriptor is DashboardTabDescriptor => Boolean(descriptor));
+    .filter((descriptor): descriptor is DashboardTabDescriptor =>
+      Boolean(descriptor),
+    );
 
   return [...securityDetailTabs, ...baseTabs, ...tradeDetailTabs];
 }
@@ -301,7 +332,9 @@ function getTabAtIndex(index: number): DashboardTabDescriptor | null {
   return tabs[index];
 }
 
-function resolveDashboardPanel(panels: HassPanels | null | undefined): PanelLike {
+function resolveDashboardPanel(
+  panels: HassPanels | null | undefined,
+): PanelLike {
   if (!panels) {
     return null;
   }
@@ -311,22 +344,29 @@ function resolveDashboardPanel(panels: HassPanels | null | undefined): PanelLike
     return preferred;
   }
   const fallback = Object.values(normalizedPanels).find((panelConfig) => {
-    if (!panelConfig || typeof panelConfig !== 'object') {
+    if (!panelConfig || typeof panelConfig !== "object") {
       return false;
     }
-    const name = (panelConfig as { webcomponent_name?: unknown }).webcomponent_name;
-    return name === 'pp-reader-panel';
+    const name = (panelConfig as { webcomponent_name?: unknown })
+      .webcomponent_name;
+    return name === "pp-reader-panel";
   });
   return fallback ?? null;
 }
 function rememberCurrentPageScroll(): void {
   try {
     const dashboardElement = findDashboardElement();
-    if (dashboardElement && typeof dashboardElement.rememberScrollPosition === 'function') {
+    if (
+      dashboardElement &&
+      typeof dashboardElement.rememberScrollPosition === "function"
+    ) {
       dashboardElement.rememberScrollPosition();
     }
   } catch (error) {
-    console.warn('rememberCurrentPageScroll: konnte Scroll-Position nicht sichern', error);
+    console.warn(
+      "rememberCurrentPageScroll: konnte Scroll-Position nicht sichern",
+      error,
+    );
   }
 }
 
@@ -361,27 +401,45 @@ async function navigateToPage(
 
   rememberCurrentPageScroll();
 
-  const currentTab = currentPage >= 0 && currentPage < tabs.length ? tabs[currentPage] : null;
+  const currentTab =
+    currentPage >= 0 && currentPage < tabs.length ? tabs[currentPage] : null;
   const currentSecurityUuid = currentTab
     ? extractSecurityUuidFromKey(currentTab.key)
     : null;
   let nextIndex = clampedIndex;
 
   if (currentSecurityUuid && currentTab) {
-    const intendedTarget = clampedIndex >= 0 && clampedIndex < tabs.length ? tabs[clampedIndex] : null;
+    const intendedTarget =
+      clampedIndex >= 0 && clampedIndex < tabs.length
+        ? tabs[clampedIndex]
+        : null;
     if (intendedTarget) {
-      if (currentTab.key.startsWith(SECURITY_DETAIL_TAB_PREFIX) && intendedTarget.key === OVERVIEW_TAB_KEY) {
-        const closed = closeSecurityDetail(currentSecurityUuid, { suppressRender: true });
+      if (
+        currentTab.key.startsWith(SECURITY_DETAIL_TAB_PREFIX) &&
+        intendedTarget.key === OVERVIEW_TAB_KEY
+      ) {
+        const closed = closeSecurityDetail(currentSecurityUuid, {
+          suppressRender: true,
+        });
         if (closed) {
           const updatedTabs = getVisibleTabs();
-          const overviewIndex = updatedTabs.findIndex((tab) => tab.key === OVERVIEW_TAB_KEY);
+          const overviewIndex = updatedTabs.findIndex(
+            (tab) => tab.key === OVERVIEW_TAB_KEY,
+          );
           nextIndex = overviewIndex >= 0 ? overviewIndex : 0;
         }
-      } else if (currentTab.key.startsWith(TRADE_DETAIL_TAB_PREFIX) && intendedTarget.key === TRADES_TAB_KEY) {
-        const closed = closeTradeDetail(currentSecurityUuid, { suppressRender: true });
+      } else if (
+        currentTab.key.startsWith(TRADE_DETAIL_TAB_PREFIX) &&
+        intendedTarget.key === TRADES_TAB_KEY
+      ) {
+        const closed = closeTradeDetail(currentSecurityUuid, {
+          suppressRender: true,
+        });
         if (closed) {
           const updatedTabs = getVisibleTabs();
-          const tradesIndex = updatedTabs.findIndex((tab) => tab.key === TRADES_TAB_KEY);
+          const tradesIndex = updatedTabs.findIndex(
+            (tab) => tab.key === TRADES_TAB_KEY,
+          );
           nextIndex = tradesIndex >= 0 ? tradesIndex : 0;
         }
       }
@@ -399,7 +457,7 @@ async function navigateToPage(
     await renderTab(root, hass, panel);
     notifyExternalRender(renderedPage);
   } catch (error) {
-    console.error('navigateToPage: Fehler beim Rendern des Tabs', error);
+    console.error("navigateToPage: Fehler beim Rendern des Tabs", error);
   } finally {
     navigationInProgress = false;
   }
@@ -418,8 +476,12 @@ export function registerDetailTab(
   key: string,
   descriptor: DetailTabDescriptorInput | null | undefined,
 ): void {
-  if (!key || !descriptor || typeof descriptor.render !== 'function') {
-    console.error('registerDetailTab: Ungültiger Tab-Descriptor', key, descriptor);
+  if (!key || !descriptor || typeof descriptor.render !== "function") {
+    console.error(
+      "registerDetailTab: Ungültiger Tab-Descriptor",
+      key,
+      descriptor,
+    );
     return;
   }
 
@@ -472,19 +534,22 @@ export function unregisterDetailTab(key: string | null | undefined): void {
   }
 
   const descriptor = detailTabRegistry.get(key);
-  if (descriptor && typeof descriptor.cleanup === 'function') {
+  if (descriptor && typeof descriptor.cleanup === "function") {
     try {
       const cleanupResult = descriptor.cleanup({ key });
       if (isPromiseLike<unknown>(cleanupResult)) {
         cleanupResult.catch((cleanupError: unknown) => {
           console.error(
-            'unregisterDetailTab: Fehler beim asynchronen cleanup',
+            "unregisterDetailTab: Fehler beim asynchronen cleanup",
             cleanupError,
           );
         });
       }
     } catch (error: unknown) {
-      console.error('unregisterDetailTab: Fehler beim Ausführen von cleanup', error);
+      console.error(
+        "unregisterDetailTab: Fehler beim Ausführen von cleanup",
+        error,
+      );
     }
   }
 
@@ -505,15 +570,20 @@ export function hasDetailTab(key: string): boolean {
   return detailTabRegistry.has(key);
 }
 
-export function getDetailTabDescriptor(key: string): DashboardTabDescriptor | null {
+export function getDetailTabDescriptor(
+  key: string,
+): DashboardTabDescriptor | null {
   return detailTabRegistry.get(key) ?? null;
 }
 
 export function setSecurityDetailTabFactory(
   factory: DetailTabFactory | null | undefined,
 ): void {
-  if (factory != null && typeof factory !== 'function') {
-    console.error('setSecurityDetailTabFactory: Erwartet Funktion oder null', factory);
+  if (factory != null && typeof factory !== "function") {
+    console.error(
+      "setSecurityDetailTabFactory: Erwartet Funktion oder null",
+      factory,
+    );
     return;
   }
 
@@ -523,8 +593,11 @@ export function setSecurityDetailTabFactory(
 function setTradeDetailTabFactory(
   factory: DetailTabFactory | null | undefined,
 ): void {
-  if (factory != null && typeof factory !== 'function') {
-    console.error('setTradeDetailTabFactory: Erwartet Funktion oder null', factory);
+  if (factory != null && typeof factory !== "function") {
+    console.error(
+      "setTradeDetailTabFactory: Erwartet Funktion oder null",
+      factory,
+    );
     return;
   }
 
@@ -552,14 +625,18 @@ function findDashboardElement(): DashboardElement | null {
   }
 
   for (const host of hostCandidates) {
-    const nested = host.shadowRoot?.querySelector<DashboardElement>('pp-reader-dashboard');
+    const nested = host.shadowRoot?.querySelector<DashboardElement>(
+      "pp-reader-dashboard",
+    );
     if (nested) {
       return nested;
     }
   }
 
-  if (typeof document !== 'undefined') {
-    const standalone = document.querySelector<DashboardElement>('pp-reader-dashboard');
+  if (typeof document !== "undefined") {
+    const standalone = document.querySelector<DashboardElement>(
+      "pp-reader-dashboard",
+    );
     if (standalone) {
       return standalone;
     }
@@ -571,16 +648,18 @@ function findDashboardElement(): DashboardElement | null {
 function requestDashboardRender(): void {
   const dashboardElement = findDashboardElement();
   if (!dashboardElement) {
-    console.warn('requestDashboardRender: Kein pp-reader-dashboard Element gefunden');
+    console.warn(
+      "requestDashboardRender: Kein pp-reader-dashboard Element gefunden",
+    );
     return;
   }
 
-  if (typeof dashboardElement._renderIfInitialized === 'function') {
+  if (typeof dashboardElement._renderIfInitialized === "function") {
     dashboardElement._renderIfInitialized();
     return;
   }
 
-  if (typeof dashboardElement._render === 'function') {
+  if (typeof dashboardElement._render === "function") {
     dashboardElement._render();
   }
 }
@@ -596,40 +675,51 @@ function notifyExternalRender(page: number): void {
     return;
   }
 
-  if (typeof dashboardElement.handleExternalRender === 'function') {
+  if (typeof dashboardElement.handleExternalRender === "function") {
     try {
       dashboardElement.handleExternalRender(page);
     } catch (error) {
-      console.warn('notifyExternalRender: Fehler beim Synchronisieren des Dashboards', error);
+      console.warn(
+        "notifyExternalRender: Fehler beim Synchronisieren des Dashboards",
+        error,
+      );
     }
   }
 }
 
 function openSecurityDetail(securityUuid: string | null | undefined): boolean {
   if (!securityUuid) {
-    console.error('openSecurityDetail: Ungültige securityUuid', securityUuid);
+    console.error("openSecurityDetail: Ungültige securityUuid", securityUuid);
     return false;
   }
 
   const tabKey = getSecurityDetailTabKey(securityUuid);
   let descriptor = getDetailTabDescriptor(tabKey);
 
-  if (!descriptor && typeof securityDetailTabFactory === 'function') {
+  if (!descriptor && typeof securityDetailTabFactory === "function") {
     try {
       const maybeDescriptor = securityDetailTabFactory(securityUuid);
-      if (maybeDescriptor && typeof maybeDescriptor.render === 'function') {
+      if (maybeDescriptor && typeof maybeDescriptor.render === "function") {
         registerDetailTab(tabKey, maybeDescriptor);
         descriptor = getDetailTabDescriptor(tabKey);
       } else {
-        console.error('openSecurityDetail: Factory lieferte ungültigen Descriptor', maybeDescriptor);
+        console.error(
+          "openSecurityDetail: Factory lieferte ungültigen Descriptor",
+          maybeDescriptor,
+        );
       }
     } catch (error) {
-      console.error('openSecurityDetail: Fehler beim Erzeugen des Tab-Descriptors', error);
+      console.error(
+        "openSecurityDetail: Fehler beim Erzeugen des Tab-Descriptors",
+        error,
+      );
     }
   }
 
   if (!descriptor) {
-    console.warn(`openSecurityDetail: Kein Detail-Tab für ${securityUuid} verfügbar`);
+    console.warn(
+      `openSecurityDetail: Kein Detail-Tab für ${securityUuid} verfügbar`,
+    );
     return false;
   }
 
@@ -642,7 +732,9 @@ function openSecurityDetail(securityUuid: string | null | undefined): boolean {
     const updatedTabs = getVisibleTabs();
     targetIndex = updatedTabs.findIndex((tab) => tab.key === tabKey);
     if (targetIndex === -1) {
-      console.error('openSecurityDetail: Tab nach Registrierung nicht auffindbar');
+      console.error(
+        "openSecurityDetail: Tab nach Registrierung nicht auffindbar",
+      );
       return false;
     }
   }
@@ -663,29 +755,37 @@ function openSecurityDetail(securityUuid: string | null | undefined): boolean {
 
 function openTradeDetail(securityUuid: string | null | undefined): boolean {
   if (!securityUuid) {
-    console.error('openTradeDetail: Ungültige securityUuid', securityUuid);
+    console.error("openTradeDetail: Ungültige securityUuid", securityUuid);
     return false;
   }
 
   const tabKey = getTradeDetailTabKey(securityUuid);
   let descriptor = getDetailTabDescriptor(tabKey);
 
-  if (!descriptor && typeof tradeDetailTabFactory === 'function') {
+  if (!descriptor && typeof tradeDetailTabFactory === "function") {
     try {
       const maybeDescriptor = tradeDetailTabFactory(securityUuid);
-      if (maybeDescriptor && typeof maybeDescriptor.render === 'function') {
+      if (maybeDescriptor && typeof maybeDescriptor.render === "function") {
         registerDetailTab(tabKey, maybeDescriptor);
         descriptor = getDetailTabDescriptor(tabKey);
       } else {
-        console.error('openTradeDetail: Factory lieferte ungültigen Descriptor', maybeDescriptor);
+        console.error(
+          "openTradeDetail: Factory lieferte ungültigen Descriptor",
+          maybeDescriptor,
+        );
       }
     } catch (error) {
-      console.error('openTradeDetail: Fehler beim Erzeugen des Tab-Descriptors', error);
+      console.error(
+        "openTradeDetail: Fehler beim Erzeugen des Tab-Descriptors",
+        error,
+      );
     }
   }
 
   if (!descriptor) {
-    console.warn(`openTradeDetail: Kein Detail-Tab für ${securityUuid} verfügbar`);
+    console.warn(
+      `openTradeDetail: Kein Detail-Tab für ${securityUuid} verfügbar`,
+    );
     return false;
   }
 
@@ -698,7 +798,7 @@ function openTradeDetail(securityUuid: string | null | undefined): boolean {
     const updatedTabs = getVisibleTabs();
     targetIndex = updatedTabs.findIndex((tab) => tab.key === tabKey);
     if (targetIndex === -1) {
-      console.error('openTradeDetail: Tab nach Registrierung nicht auffindbar');
+      console.error("openTradeDetail: Tab nach Registrierung nicht auffindbar");
       return false;
     }
   }
@@ -726,7 +826,7 @@ function closeSecurityDetail(
   options: CloseSecurityDetailOptions = {},
 ): boolean {
   if (!securityUuid) {
-    console.error('closeSecurityDetail: Ungültige securityUuid', securityUuid);
+    console.error("closeSecurityDetail: Ungültige securityUuid", securityUuid);
     return false;
   }
 
@@ -760,11 +860,16 @@ function closeSecurityDetail(
   lastClosedSecurityUuid = securityUuid;
 
   if (wasActive) {
-    const overviewIndex = tabsAfter.findIndex((tab) => tab.key === OVERVIEW_TAB_KEY);
+    const overviewIndex = tabsAfter.findIndex(
+      (tab) => tab.key === OVERVIEW_TAB_KEY,
+    );
     if (overviewIndex >= 0) {
       currentPage = overviewIndex;
     } else {
-      currentPage = Math.min(Math.max(tabIndexBefore - 1, 0), tabsAfter.length - 1);
+      currentPage = Math.min(
+        Math.max(tabIndexBefore - 1, 0),
+        tabsAfter.length - 1,
+      );
     }
   } else if (currentPage >= tabsAfter.length) {
     currentPage = Math.max(0, tabsAfter.length - 1);
@@ -786,7 +891,7 @@ function closeTradeDetail(
   options: CloseSecurityDetailOptions = {},
 ): boolean {
   if (!securityUuid) {
-    console.error('closeTradeDetail: Ungültige securityUuid', securityUuid);
+    console.error("closeTradeDetail: Ungültige securityUuid", securityUuid);
     return false;
   }
 
@@ -820,11 +925,16 @@ function closeTradeDetail(
   lastClosedSecurityUuid = securityUuid;
 
   if (wasActive) {
-    const tradesIndex = tabsAfter.findIndex((tab) => tab.key === TRADES_TAB_KEY);
+    const tradesIndex = tabsAfter.findIndex(
+      (tab) => tab.key === TRADES_TAB_KEY,
+    );
     if (tradesIndex >= 0) {
       currentPage = tradesIndex;
     } else {
-      currentPage = Math.min(Math.max(tabIndexBefore - 1, 0), tabsAfter.length - 1);
+      currentPage = Math.min(
+        Math.max(tabIndexBefore - 1, 0),
+        tabsAfter.length - 1,
+      );
     }
   } else if (currentPage >= tabsAfter.length) {
     currentPage = Math.max(0, tabsAfter.length - 1);
@@ -857,7 +967,9 @@ async function renderTab(
 
   const tab = getTabAtIndex(currentPage);
   if (!tab) {
-    console.error('renderTab: Kein gültiger Tab oder keine render-Methode gefunden!');
+    console.error(
+      "renderTab: Kein gültiger Tab oder keine render-Methode gefunden!",
+    );
     return;
   }
 
@@ -865,12 +977,12 @@ async function renderTab(
   try {
     content = await tab.render(root, hass, effectivePanel);
   } catch (error: unknown) {
-    console.error('renderTab: Fehler beim Rendern des Tabs:', error);
+    console.error("renderTab: Fehler beim Rendern des Tabs:", error);
     root.innerHTML = `<div class="card"><h2>Fehler</h2><pre>${escapeHtml(toErrorMessage(error))}</pre></div>`;
     return;
   }
 
-  root.innerHTML = content ?? '';
+  root.innerHTML = content ?? "";
 
   if (tab.render === renderDashboard) {
     attachPortfolioToggleHandler(root);
@@ -879,7 +991,7 @@ async function renderTab(
   const waitForHeaderCard = (): Promise<HTMLElement> =>
     new Promise((resolve) => {
       const interval = window.setInterval(() => {
-        const headerCard = root.querySelector<HTMLElement>('.header-card');
+        const headerCard = root.querySelector<HTMLElement>(".header-card");
         if (headerCard) {
           clearInterval(interval);
           resolve(headerCard);
@@ -891,10 +1003,10 @@ async function renderTab(
 
   let anchor = root.querySelector<HTMLElement>(`#${STICKY_HEADER_ANCHOR_ID}`);
   if (!anchor) {
-    anchor = document.createElement('div');
+    anchor = document.createElement("div");
     anchor.id = STICKY_HEADER_ANCHOR_ID;
     const parent = headerCard.parentNode as (ParentNode & Node) | null;
-    if (parent && 'insertBefore' in parent) {
+    if (parent && "insertBefore" in parent) {
       parent.insertBefore(anchor, headerCard);
     }
   }
@@ -905,11 +1017,13 @@ async function renderTab(
 }
 
 function setupHeaderScrollBehavior(root: HTMLElement): void {
-  const headerCard = root.querySelector<HTMLElement>('.header-card');
+  const headerCard = root.querySelector<HTMLElement>(".header-card");
   const anchor = root.querySelector<HTMLElement>(`#${STICKY_HEADER_ANCHOR_ID}`);
 
   if (!headerCard || !anchor) {
-    console.error('Fehlende Elemente für das Scrollverhalten: headerCard oder anchor.');
+    console.error(
+      "Fehlende Elemente für das Scrollverhalten: headerCard oder anchor.",
+    );
     return;
   }
 
@@ -918,14 +1032,14 @@ function setupHeaderScrollBehavior(root: HTMLElement): void {
   observer = new IntersectionObserver(
     ([entry]) => {
       if (!entry.isIntersecting) {
-        headerCard.classList.add('sticky');
+        headerCard.classList.add("sticky");
       } else {
-        headerCard.classList.remove('sticky');
+        headerCard.classList.remove("sticky");
       }
     },
     {
       root: null,
-      rootMargin: '0px 0px 0px 0px',
+      rootMargin: "0px 0px 0px 0px",
       threshold: 0,
     },
   );
@@ -938,9 +1052,9 @@ function setupSwipeOnHeaderCard(
   hass: HomeAssistant | null | undefined,
   panel: PanelLike,
 ): void {
-  const headerCard = root.querySelector<HTMLElement>('.header-card');
+  const headerCard = root.querySelector<HTMLElement>(".header-card");
   if (!headerCard) {
-    console.error('Header-Card nicht gefunden!');
+    console.error("Header-Card nicht gefunden!");
     return;
   }
 
@@ -960,25 +1074,25 @@ function setupNavigation(
   hass: HomeAssistant | null | undefined,
   panel: PanelLike,
 ): void {
-  const headerCard = root.querySelector<HTMLElement>('.header-card');
+  const headerCard = root.querySelector<HTMLElement>(".header-card");
   if (!headerCard) {
-    console.error('Header-Card nicht gefunden!');
+    console.error("Header-Card nicht gefunden!");
     return;
   }
 
-  const navLeft = headerCard.querySelector<HTMLButtonElement>('#nav-left');
-  const navRight = headerCard.querySelector<HTMLButtonElement>('#nav-right');
+  const navLeft = headerCard.querySelector<HTMLButtonElement>("#nav-left");
+  const navRight = headerCard.querySelector<HTMLButtonElement>("#nav-right");
 
   if (!navLeft || !navRight) {
-    console.error('Navigationspfeile nicht gefunden!');
+    console.error("Navigationspfeile nicht gefunden!");
     return;
   }
 
-  navLeft.addEventListener('click', () => {
+  navLeft.addEventListener("click", () => {
     navigateByDelta(-1, root, hass, panel);
   });
 
-  navRight.addEventListener('click', () => {
+  navRight.addEventListener("click", () => {
     navigateByDelta(1, root, hass, panel);
   });
 
@@ -986,13 +1100,13 @@ function setupNavigation(
 }
 
 function updateNavigationState(headerCard: HTMLElement): void {
-  const navLeft = headerCard.querySelector<HTMLButtonElement>('#nav-left');
-  const navRight = headerCard.querySelector<HTMLButtonElement>('#nav-right');
+  const navLeft = headerCard.querySelector<HTMLButtonElement>("#nav-left");
+  const navRight = headerCard.querySelector<HTMLButtonElement>("#nav-right");
 
   if (navLeft) {
     const shouldEnable = currentPage > 0 || !!lastClosedSecurityUuid;
     navLeft.disabled = !shouldEnable;
-    navLeft.classList.toggle('disabled', !shouldEnable);
+    navLeft.classList.toggle("disabled", !shouldEnable);
   }
 
   if (navRight) {
@@ -1000,7 +1114,7 @@ function updateNavigationState(headerCard: HTMLElement): void {
     const atEnd = currentPage === tabs.length - 1;
     const shouldEnable = !atEnd;
     navRight.disabled = !shouldEnable;
-    navRight.classList.toggle('disabled', !shouldEnable);
+    navRight.classList.toggle("disabled", !shouldEnable);
   }
 }
 
@@ -1037,8 +1151,8 @@ class PPReaderDashboard extends HTMLElement {
 
   constructor() {
     super();
-    this._root = document.createElement('div');
-    this._root.className = 'pp-reader-dashboard';
+    this._root = document.createElement("div");
+    this._root.className = "pp-reader-dashboard";
     this.appendChild(this._root);
   }
 
@@ -1091,14 +1205,16 @@ class PPReaderDashboard extends HTMLElement {
     const entryId = getEntryId(this._hass, this._panel);
     if (!entryId) {
       if (!this._entryIdWaitWarned) {
-        console.warn('PPReaderDashboard: kein entry_id ermittelbar – warte auf Panel-Konfiguration.');
+        console.warn(
+          "PPReaderDashboard: kein entry_id ermittelbar – warte auf Panel-Konfiguration.",
+        );
         this._entryIdWaitWarned = true;
       }
       return;
     }
 
     this._entryIdWaitWarned = false;
-    console.debug('PPReaderDashboard: entry_id (fallback) =', entryId);
+    console.debug("PPReaderDashboard: entry_id (fallback) =", entryId);
     this._initialized = true;
     this._initializeEventListeners();
     this._render();
@@ -1108,12 +1224,14 @@ class PPReaderDashboard extends HTMLElement {
     this._removeEventListeners();
 
     const conn = this._hass?.connection;
-    if (!conn || typeof conn.subscribeEvents !== 'function') {
-      console.error('PPReaderDashboard: keine valide WebSocket-Verbindung oder subscribeEvents fehlt');
+    if (!conn || typeof conn.subscribeEvents !== "function") {
+      console.error(
+        "PPReaderDashboard: keine valide WebSocket-Verbindung oder subscribeEvents fehlt",
+      );
       return;
     }
 
-    const eventTypes: readonly string[] = ['panels_updated'];
+    const eventTypes: readonly string[] = ["panels_updated"];
 
     const subs: HassUnsubscribe[] = [];
     const subscriptionPromise = Promise.all(
@@ -1123,18 +1241,22 @@ class PPReaderDashboard extends HTMLElement {
             this._handleBusEvent.bind(this),
             eventType,
           );
-          if (typeof unsubscribe === 'function') {
+          if (typeof unsubscribe === "function") {
             subs.push(unsubscribe);
-            console.debug('PPReaderDashboard: subscribed to', eventType);
+            console.debug("PPReaderDashboard: subscribed to", eventType);
           } else {
             console.error(
-              'PPReaderDashboard: subscribeEvents lieferte kein Unsubscribe-Func für',
+              "PPReaderDashboard: subscribeEvents lieferte kein Unsubscribe-Func für",
               eventType,
               unsubscribe,
             );
           }
         } catch (subscribeError: unknown) {
-          console.error('PPReaderDashboard: Fehler bei subscribeEvents für', eventType, subscribeError);
+          console.error(
+            "PPReaderDashboard: Fehler bei subscribeEvents für",
+            eventType,
+            subscribeError,
+          );
         }
       }),
     );
@@ -1148,19 +1270,25 @@ class PPReaderDashboard extends HTMLElement {
               // ignore cleanup errors
             }
           });
-          console.debug('PPReaderDashboard: alle Event-Subscriptions entfernt');
+          console.debug("PPReaderDashboard: alle Event-Subscriptions entfernt");
         };
       })
       .catch((error: unknown) => {
-        console.error('PPReaderDashboard: Fehler beim Registrieren der Events', error);
+        console.error(
+          "PPReaderDashboard: Fehler beim Registrieren der Events",
+          error,
+        );
       });
   }
   private _removeEventListeners(): void {
-    if (typeof this._unsubscribeEvents === 'function') {
+    if (typeof this._unsubscribeEvents === "function") {
       try {
         this._unsubscribeEvents();
       } catch (error: unknown) {
-        console.error('PPReaderDashboard: Fehler beim Entfernen der Event-Listener:', error);
+        console.error(
+          "PPReaderDashboard: Fehler beim Entfernen der Event-Listener:",
+          error,
+        );
       }
     }
     this._unsubscribeEvents = null;
@@ -1181,7 +1309,10 @@ class PPReaderDashboard extends HTMLElement {
       return;
     }
 
-    const normalized = normalizeDashboardUpdate(eventData.data_type, eventData.data);
+    const normalized = normalizeDashboardUpdate(
+      eventData.data_type,
+      eventData.data,
+    );
     if (!normalized) {
       return;
     }
@@ -1195,21 +1326,21 @@ class PPReaderDashboard extends HTMLElement {
     pushedData: DashboardUpdatePayloadMap[T] | null | undefined,
   ): void {
     switch (dataType) {
-      case 'accounts':
+      case "accounts":
         handleAccountUpdate(
-          pushedData as DashboardUpdatePayloadMap['accounts'],
+          pushedData as DashboardUpdatePayloadMap["accounts"],
           this._root,
         );
         break;
-      case 'last_file_update':
+      case "last_file_update":
         handleLastFileUpdate(
-          pushedData as DashboardUpdatePayloadMap['last_file_update'],
+          pushedData as DashboardUpdatePayloadMap["last_file_update"],
           this._root,
         );
         break;
-      case 'portfolio_values':
+      case "portfolio_values":
         handlePortfolioUpdate(
-          pushedData as DashboardUpdatePayloadMap['portfolio_values'],
+          pushedData as DashboardUpdatePayloadMap["portfolio_values"],
           this._root,
         );
         // Portfolio/Price updates affect wealth calculations
@@ -1218,9 +1349,9 @@ class PPReaderDashboard extends HTMLElement {
           void refreshAnalyseData(this._root, this._hass, this._panel);
         }
         break;
-      case 'portfolio_positions':
+      case "portfolio_positions":
         handlePortfolioPositionsUpdate(
-          pushedData as DashboardUpdatePayloadMap['portfolio_positions'],
+          pushedData as DashboardUpdatePayloadMap["portfolio_positions"],
           this._root,
         );
         // Position updates (buying/selling) affect wealth calculations
@@ -1229,7 +1360,7 @@ class PPReaderDashboard extends HTMLElement {
           void refreshAnalyseData(this._root, this._hass, this._panel);
         }
         break;
-      case 'daily_wealth':
+      case "daily_wealth":
         invalidateDailyWealthCache();
         {
           const activeTab = getTabAtIndex(currentPage);
@@ -1239,7 +1370,7 @@ class PPReaderDashboard extends HTMLElement {
         }
         break;
       default:
-        console.warn('PPReaderDashboard: Unbekannter Datentyp:', dataType);
+        console.warn("PPReaderDashboard: Unbekannter Datentyp:", dataType);
         break;
     }
   }
@@ -1254,16 +1385,17 @@ class PPReaderDashboard extends HTMLElement {
       data: clonedData,
     };
 
-    if (dataType === 'portfolio_positions') {
+    if (dataType === "portfolio_positions") {
       entry.portfolioUuid = extractPortfolioUuidFromPositionsUpdate(
-        clonedData as DashboardUpdatePayloadMap['portfolio_positions'],
+        clonedData as DashboardUpdatePayloadMap["portfolio_positions"],
       );
     }
 
     let index = -1;
-    if (dataType === 'portfolio_positions' && entry.portfolioUuid) {
+    if (dataType === "portfolio_positions" && entry.portfolioUuid) {
       index = this._pendingUpdates.findIndex(
-        (item) => item.type === dataType && item.portfolioUuid === entry.portfolioUuid,
+        (item) =>
+          item.type === dataType && item.portfolioUuid === entry.portfolioUuid,
       );
     } else {
       index = this._pendingUpdates.findIndex((item) => item.type === dataType);
@@ -1284,23 +1416,32 @@ class PPReaderDashboard extends HTMLElement {
     }
 
     try {
-      if (typeof structuredClone === 'function') {
+      if (typeof structuredClone === "function") {
         return structuredClone(data);
       }
     } catch (error: unknown) {
-      console.warn('PPReaderDashboard: structuredClone fehlgeschlagen, falle auf JSON zurück', error);
+      console.warn(
+        "PPReaderDashboard: structuredClone fehlgeschlagen, falle auf JSON zurück",
+        error,
+      );
     }
 
     try {
       return JSON.parse(JSON.stringify(data)) as T;
     } catch (error: unknown) {
-      console.warn('PPReaderDashboard: JSON-Clone fehlgeschlagen, referenziere Originaldaten', error);
+      console.warn(
+        "PPReaderDashboard: JSON-Clone fehlgeschlagen, referenziere Originaldaten",
+        error,
+      );
       return data;
     }
   }
 
   private _reapplyPendingUpdates(): void {
-    if (!Array.isArray(this._pendingUpdates) || this._pendingUpdates.length === 0) {
+    if (
+      !Array.isArray(this._pendingUpdates) ||
+      this._pendingUpdates.length === 0
+    ) {
       return;
     }
 
@@ -1308,7 +1449,11 @@ class PPReaderDashboard extends HTMLElement {
       try {
         this._doRender(item.type, this._cloneData(item.data));
       } catch (error: unknown) {
-        console.error('PPReaderDashboard: Fehler beim erneuten Anwenden eines Updates', item, error);
+        console.error(
+          "PPReaderDashboard: Fehler beim erneuten Anwenden eines Updates",
+          item,
+          error,
+        );
       }
     }
   }
@@ -1330,11 +1475,15 @@ class PPReaderDashboard extends HTMLElement {
 
   private _render(): void {
     if (!this._hass) {
-      console.warn('pp-reader-dashboard: noch kein hass, überspringe _render()');
+      console.warn(
+        "pp-reader-dashboard: noch kein hass, überspringe _render()",
+      );
       return;
     }
     if (!this._initialized) {
-      console.debug('pp-reader-dashboard: _render aufgerufen bevor initialisiert');
+      console.debug(
+        "pp-reader-dashboard: _render aufgerufen bevor initialisiert",
+      );
       return;
     }
 
@@ -1360,7 +1509,10 @@ class PPReaderDashboard extends HTMLElement {
           this._afterRender(page);
         })
         .catch((error: unknown) => {
-          console.error('PPReaderDashboard: Fehler beim Rendern des Tabs', error);
+          console.error(
+            "PPReaderDashboard: Fehler beim Rendern des Tabs",
+            error,
+          );
           this._afterRender(page);
         });
       return;
@@ -1381,18 +1533,21 @@ class PPReaderDashboard extends HTMLElement {
     try {
       this._reapplyPendingUpdates();
     } catch (error) {
-      console.error('PPReaderDashboard: Fehler beim Wiederanlegen der Updates', error);
+      console.error(
+        "PPReaderDashboard: Fehler beim Wiederanlegen der Updates",
+        error,
+      );
     }
 
     this._hasNewData = false;
   }
 }
 
-if (!customElements.get('pp-reader-dashboard')) {
-  customElements.define('pp-reader-dashboard', PPReaderDashboard);
+if (!customElements.get("pp-reader-dashboard")) {
+  customElements.define("pp-reader-dashboard", PPReaderDashboard);
 }
 
-console.log('PPReader dashboard module v20250914b geladen');
+console.log("PPReader dashboard module v20250914b geladen");
 registerSecurityDetailTab({
   setSecurityDetailTabFactory,
 });

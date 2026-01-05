@@ -2,7 +2,7 @@
  * Test helpers for installing and restoring a DOM-like environment via JSDOM.
  */
 
-import { JSDOM } from 'jsdom';
+import { JSDOM } from "jsdom";
 
 type DomGlobals = typeof globalThis & {
   window?: Window & typeof globalThis;
@@ -25,7 +25,8 @@ export interface InstalledDomEnvironment {
   restore(): void;
 }
 
-const DEFAULT_MARKUP = '<!doctype html><html><body><div id="root"></div></body></html>';
+const DEFAULT_MARKUP =
+  '<!doctype html><html><body><div id="root"></div></body></html>';
 
 /**
  * Installs JSDOM-backed DOM globals for test cases that rely on browser APIs.
@@ -34,7 +35,9 @@ const DEFAULT_MARKUP = '<!doctype html><html><body><div id="root"></div></body><
  * `restore` method is invoked. Consumers are expected to call `restore` in a
  * `finally` block to avoid leaking DOM state between tests.
  */
-export function installDomEnvironment(markup: string = DEFAULT_MARKUP): InstalledDomEnvironment {
+export function installDomEnvironment(
+  markup: string = DEFAULT_MARKUP,
+): InstalledDomEnvironment {
   const dom = new JSDOM(markup);
   const globalRef = globalThis as DomGlobals;
 
@@ -46,16 +49,25 @@ export function installDomEnvironment(markup: string = DEFAULT_MARKUP): Installe
   const previousNode = globalRef.Node;
   const previousCustomElements = globalRef.customElements;
 
-  const hadWindow = Object.prototype.hasOwnProperty.call(globalRef, 'window');
-  const hadDocument = Object.prototype.hasOwnProperty.call(globalRef, 'document');
-  const hadHTMLElement = Object.prototype.hasOwnProperty.call(globalRef, 'HTMLElement');
+  const hadWindow = Object.prototype.hasOwnProperty.call(globalRef, "window");
+  const hadDocument = Object.prototype.hasOwnProperty.call(
+    globalRef,
+    "document",
+  );
+  const hadHTMLElement = Object.prototype.hasOwnProperty.call(
+    globalRef,
+    "HTMLElement",
+  );
   const hadHTMLTableElement = Object.prototype.hasOwnProperty.call(
     globalRef,
-    'HTMLTableElement',
+    "HTMLTableElement",
   );
-  const hadElement = Object.prototype.hasOwnProperty.call(globalRef, 'Element');
-  const hadNode = Object.prototype.hasOwnProperty.call(globalRef, 'Node');
-  const hadCustomElements = Object.prototype.hasOwnProperty.call(globalRef, 'customElements');
+  const hadElement = Object.prototype.hasOwnProperty.call(globalRef, "Element");
+  const hadNode = Object.prototype.hasOwnProperty.call(globalRef, "Node");
+  const hadCustomElements = Object.prototype.hasOwnProperty.call(
+    globalRef,
+    "customElements",
+  );
 
   const windowInstance = dom.window as unknown as Window & typeof globalThis;
   globalRef.window = windowInstance;
@@ -75,43 +87,43 @@ export function installDomEnvironment(markup: string = DEFAULT_MARKUP): Installe
       if (hadWindow) {
         target.window = previousWindow;
       } else {
-        Reflect.deleteProperty(target, 'window');
+        Reflect.deleteProperty(target, "window");
       }
 
       if (hadDocument) {
         target.document = previousDocument;
       } else {
-        Reflect.deleteProperty(target, 'document');
+        Reflect.deleteProperty(target, "document");
       }
 
       if (hadHTMLElement) {
         target.HTMLElement = previousHTMLElement;
       } else {
-        Reflect.deleteProperty(target, 'HTMLElement');
+        Reflect.deleteProperty(target, "HTMLElement");
       }
 
       if (hadHTMLTableElement) {
         target.HTMLTableElement = previousHTMLTableElement;
       } else {
-        Reflect.deleteProperty(target, 'HTMLTableElement');
+        Reflect.deleteProperty(target, "HTMLTableElement");
       }
 
       if (hadElement) {
         target.Element = previousElement;
       } else {
-        Reflect.deleteProperty(target, 'Element');
+        Reflect.deleteProperty(target, "Element");
       }
 
       if (hadNode) {
         target.Node = previousNode;
       } else {
-        Reflect.deleteProperty(target, 'Node');
+        Reflect.deleteProperty(target, "Node");
       }
 
       if (hadCustomElements) {
         target.customElements = previousCustomElements;
       } else {
-        Reflect.deleteProperty(target, 'customElements');
+        Reflect.deleteProperty(target, "customElements");
       }
 
       dom.window.close();

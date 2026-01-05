@@ -187,7 +187,8 @@ export function formatValue(
         // that is NOT in the allowlist (like <a>, <script>, <img>, <svg>), we escape the whole string.
         // Allowed tags: span, div, ha-icon, strong, br, p, button.
         // Regex finds any tag <TAG that is NOT in the allowlist.
-        const DISALLOWED_TAG_PATTERN = /<\/?(?!(?:span|div|ha-icon|strong|br|p|button)\b)[a-z][a-z0-9]*\b/i;
+        const DISALLOWED_TAG_PATTERN =
+          /<\/?(?!(?:span|div|ha-icon|strong|br|p|button)\b)[a-z][a-z0-9]*\b/i;
 
         // Expanded blacklist for attributes on allowed tags:
         // - javascript: (catch all variations in attributes)
@@ -195,9 +196,13 @@ export function formatValue(
         // - on[event]= (inline handlers)
         // - url( (prevent CSS injection in style attributes)
         // - href/src (allowed tags shouldn't need these, blocks potential oversight)
-        const DANGEROUS_PATTERN = /javascript:|data:\w+\/|[\s\/]on[a-z]+\s*=|url\s*\(|[\s\/](?:href|src)\s*=/i;
+        const DANGEROUS_PATTERN =
+          /javascript:|data:\w+\/|[\s\/]on[a-z]+\s*=|url\s*\(|[\s\/](?:href|src)\s*=/i;
 
-        if (DISALLOWED_TAG_PATTERN.test(formatted) || DANGEROUS_PATTERN.test(formatted)) {
+        if (
+          DISALLOWED_TAG_PATTERN.test(formatted) ||
+          DANGEROUS_PATTERN.test(formatted)
+        ) {
           formatted = escapeHtml(formatted);
         }
       }
@@ -303,7 +308,7 @@ export function makeTable(
                   c.key === "day_change_pct"
                     ? (dayChange as Record<string, unknown>).change_pct
                     : ((dayChange as Record<string, unknown>)
-                      .value_change_eur ??
+                        .value_change_eur ??
                       (dayChange as Record<string, unknown>).price_change_eur);
                 if (typeof metric === "number") {
                   candidate = metric;
@@ -381,9 +386,9 @@ export function makeTable(
     // 1. Explicit Footer Override (via options.footerValues)
     if (options.footerValues && options.footerValues[c.key] !== undefined) {
       const val = options.footerValues[c.key];
-      if (typeof val === 'string') {
+      if (typeof val === "string") {
         html += `<td${alignClass}>${val}</td>`;
-      } else if (typeof val === 'number') {
+      } else if (typeof val === "number") {
         html += `<td${alignClass}>${formatValue(c.key, val)}</td>`;
       } else {
         // null or unknown
@@ -450,8 +455,8 @@ export function createHeaderCard(
 
   // Resolve optional subtitle
   const subtitle = (options as { subtitle?: string }).subtitle
-    ? `<div class="header-subtitle">${escapeHtml((options as { subtitle?: string }).subtitle ?? '')}</div>`
-    : '';
+    ? `<div class="header-subtitle">${escapeHtml((options as { subtitle?: string }).subtitle ?? "")}</div>`
+    : "";
 
   headerCard.innerHTML = `
     <div class="header-content">
@@ -703,7 +708,10 @@ export function sortTableRows(
       "sort-active",
       dir === "asc" ? "dir-asc" : "dir-desc",
     );
-    activeTh.setAttribute("aria-sort", dir === "asc" ? "ascending" : "descending");
+    activeTh.setAttribute(
+      "aria-sort",
+      dir === "asc" ? "ascending" : "descending",
+    );
   }
 
   return rows;

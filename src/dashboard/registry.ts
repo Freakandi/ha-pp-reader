@@ -7,7 +7,9 @@
 
 export type DashboardElement = HTMLElement;
 
-export type PortfolioPositionsRenderer = (positions: readonly unknown[]) => string;
+export type PortfolioPositionsRenderer = (
+  positions: readonly unknown[],
+) => string;
 export type GainPctMetadataApplier = (table: HTMLTableElement) => void;
 export type PortfolioPositionsSortingAttacher = (
   root: Document | HTMLElement,
@@ -34,30 +36,34 @@ const overviewHelpers: Partial<OverviewHelperRegistry> = {};
 type OverviewHelperKey = keyof OverviewHelperRegistry;
 
 const OVERVIEW_HELPER_KEYS: readonly OverviewHelperKey[] = [
-  'renderPositionsTable',
-  'applyGainPctMetadata',
-  'attachSecurityDetailListener',
-  'attachPortfolioPositionsSorting',
-  'updatePortfolioFooter',
+  "renderPositionsTable",
+  "applyGainPctMetadata",
+  "attachSecurityDetailListener",
+  "attachPortfolioPositionsSorting",
+  "updatePortfolioFooter",
 ];
 
 function setOverviewHelper<K extends OverviewHelperKey>(
   key: K,
   helper: OverviewHelperRegistry[K] | undefined,
 ): void {
-  if (typeof helper === 'function') {
+  if (typeof helper === "function") {
     overviewHelpers[key] = helper;
   }
 }
 
-export function registerDashboardElement(element: DashboardElement | null | undefined): void {
+export function registerDashboardElement(
+  element: DashboardElement | null | undefined,
+): void {
   if (!element) {
     return;
   }
   dashboardElements.add(element);
 }
 
-export function unregisterDashboardElement(element: DashboardElement | null | undefined): void {
+export function unregisterDashboardElement(
+  element: DashboardElement | null | undefined,
+): void {
   if (!element) {
     return;
   }
@@ -75,7 +81,9 @@ export function registerPanelHost(host: HTMLElement | null | undefined): void {
   panelHosts.add(host);
 }
 
-export function unregisterPanelHost(host: HTMLElement | null | undefined): void {
+export function unregisterPanelHost(
+  host: HTMLElement | null | undefined,
+): void {
   if (!host) {
     return;
   }

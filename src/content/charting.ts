@@ -11,31 +11,32 @@
  * existing chart instance.
  */
 
-import { escapeHtml } from '../utils/html';
+import { escapeHtml } from "../utils/html";
 
-const SVG_NS = 'http://www.w3.org/2000/svg';
+const SVG_NS = "http://www.w3.org/2000/svg";
 const DEFAULT_WIDTH = 640;
 const DEFAULT_HEIGHT = 260;
 const DEFAULT_MARGIN = { top: 12, right: 16, bottom: 24, left: 16 } as const;
-const DEFAULT_COLOR = 'var(--pp-reader-chart-line, #3f51b5)';
-const DEFAULT_AREA = 'var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12))';
-const DEFAULT_TICK_FONT = '0.75rem';
-const DEFAULT_BASELINE_COLOR = 'var(--pp-reader-chart-baseline, rgba(96, 125, 139, 0.75))';
-const DEFAULT_BASELINE_DASH = '6 4';
+const DEFAULT_COLOR = "var(--pp-reader-chart-line, #3f51b5)";
+const DEFAULT_AREA = "var(--pp-reader-chart-area, rgba(63, 81, 181, 0.12))";
+const DEFAULT_TICK_FONT = "0.75rem";
+const DEFAULT_BASELINE_COLOR =
+  "var(--pp-reader-chart-baseline, rgba(96, 125, 139, 0.75))";
+const DEFAULT_BASELINE_DASH = "6 4";
 const ONE_DAY_MS = 24 * 60 * 60 * 1000;
 
 function toAttributeValue(value: unknown): string | null {
   if (value == null) {
     return null;
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return value;
   }
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     return Number.isFinite(value) ? value.toString() : null;
   }
-  if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
   }
   if (value instanceof Date) {
     const timestamp = value.getTime();
@@ -45,16 +46,16 @@ function toAttributeValue(value: unknown): string | null {
 }
 
 function safeText(value: unknown): string {
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     return value;
   }
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value.toString();
   }
   if (value instanceof Date && Number.isFinite(value.getTime())) {
     return value.toISOString();
   }
-  return '';
+  return "";
 }
 
 function px(value: number): string {
@@ -224,12 +225,15 @@ function createSvgElement<K extends keyof SVGElementTagNameMap>(
   return element;
 }
 
-function toNumber(value: unknown, fallback: number | null = null): number | null {
-  if (typeof value === 'number' && Number.isFinite(value)) {
+function toNumber(
+  value: unknown,
+  fallback: number | null = null,
+): number | null {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
 
-  if (typeof value === 'string' && value.trim() !== '') {
+  if (typeof value === "string" && value.trim() !== "") {
     const parsed = Number.parseFloat(value);
     if (Number.isFinite(parsed)) {
       return parsed;
@@ -245,11 +249,11 @@ function toTimestamp(value: unknown, fallbackIndex: number): number {
     return Number.isFinite(timestamp) ? timestamp : fallbackIndex;
   }
 
-  if (typeof value === 'number' && Number.isFinite(value)) {
+  if (typeof value === "number" && Number.isFinite(value)) {
     return value;
   }
 
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const parsed = Date.parse(value);
     if (Number.isFinite(parsed)) {
       return parsed;
@@ -260,28 +264,32 @@ function toTimestamp(value: unknown, fallbackIndex: number): number {
 }
 
 const defaultXAccessor: LineChartAccessor = (entry) => {
-  if (entry && typeof entry === 'object' && 'date' in entry) {
+  if (entry && typeof entry === "object" && "date" in entry) {
     return (entry as { date?: unknown }).date;
   }
   return undefined;
 };
 
 const defaultYAccessor: LineChartAccessor = (entry) => {
-  if (entry && typeof entry === 'object' && 'close' in entry) {
+  if (entry && typeof entry === "object" && "close" in entry) {
     return (entry as { close?: unknown }).close;
   }
   return undefined;
 };
 
-const defaultXFormatter: LineChartFormatter = (timestamp, dataPoint, _index) => {
+const defaultXFormatter: LineChartFormatter = (
+  timestamp,
+  dataPoint,
+  _index,
+) => {
   if (Number.isFinite(timestamp)) {
     const date = new Date(timestamp);
     if (!Number.isNaN(date.getTime())) {
-      return date.toLocaleDateString('de-DE');
+      return date.toLocaleDateString("de-DE");
     }
   }
 
-  if (dataPoint && typeof dataPoint === 'object' && 'date' in dataPoint) {
+  if (dataPoint && typeof dataPoint === "object" && "date" in dataPoint) {
     const raw = (dataPoint as { date?: unknown }).date;
     const fallback = safeText(raw);
     if (fallback) {
@@ -290,21 +298,24 @@ const defaultXFormatter: LineChartFormatter = (timestamp, dataPoint, _index) => 
   }
 
   if (!Number.isFinite(timestamp)) {
-    return '';
+    return "";
   }
 
   return timestamp.toString();
 };
 
 const defaultYFormatter: LineChartFormatter = (value, _dataPoint, _index) => {
-  const numeric = Number.isFinite(value) ? value : toNumber(value, 0) ?? 0;
-  return numeric.toLocaleString('de-DE', {
+  const numeric = Number.isFinite(value) ? value : (toNumber(value, 0) ?? 0);
+  return numeric.toLocaleString("de-DE", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
 };
 
-const defaultTooltipRenderer: LineChartTooltipRenderer = ({ xFormatted, yFormatted }) => `
+const defaultTooltipRenderer: LineChartTooltipRenderer = ({
+  xFormatted,
+  yFormatted,
+}) => `
     <div class="chart-tooltip-date">${escapeHtml(xFormatted)}</div>
     <div class="chart-tooltip-value">${escapeHtml(yFormatted)}&nbsp;€</div>
   `;
@@ -314,14 +325,16 @@ const defaultMarkerTooltipRenderer: LineChartMarkerTooltipRenderer = ({
   xFormatted,
   yFormatted,
 }) => {
-  const label = typeof marker.label === 'string' ? marker.label : null;
+  const label = typeof marker.label === "string" ? marker.label : null;
   return `
     <div class="chart-tooltip-date">${escapeHtml(label || xFormatted)}</div>
     <div class="chart-tooltip-value">${escapeHtml(yFormatted)}</div>
   `;
 };
 
-function ensureChartState(container: LineChartContainerElement): LineChartInternalState {
+function ensureChartState(
+  container: LineChartContainerElement,
+): LineChartInternalState {
   if (!container.__chartState) {
     container.__chartState = {
       svg: null,
@@ -371,14 +384,17 @@ function clamp(value: number, min: number, max: number): number {
   return value;
 }
 
-function buildAreaPath(points: readonly LineChartComputedPoint[], baselineY: number): string {
+function buildAreaPath(
+  points: readonly LineChartComputedPoint[],
+  baselineY: number,
+): string {
   if (points.length === 0) {
-    return '';
+    return "";
   }
 
   const segments: string[] = [];
   points.forEach((point, index) => {
-    const command = index === 0 ? 'M' : 'L';
+    const command = index === 0 ? "M" : "L";
     const x = point.x.toFixed(2);
     const y = point.y.toFixed(2);
     segments.push(`${command}${x} ${y}`);
@@ -388,23 +404,23 @@ function buildAreaPath(points: readonly LineChartComputedPoint[], baselineY: num
   const lastPoint = points[points.length - 1];
   const closing = `L${lastPoint.x.toFixed(2)} ${baselineY.toFixed(2)} L${firstPoint.x.toFixed(2)} ${baselineY.toFixed(2)} Z`;
 
-  return `${segments.join(' ')} ${closing}`;
+  return `${segments.join(" ")} ${closing}`;
 }
 
 function buildLinePath(points: readonly LineChartComputedPoint[]): string {
   if (points.length === 0) {
-    return '';
+    return "";
   }
 
   const segments: string[] = [];
   points.forEach((point, index) => {
-    const command = index === 0 ? 'M' : 'L';
+    const command = index === 0 ? "M" : "L";
     const x = point.x.toFixed(2);
     const y = point.y.toFixed(2);
     segments.push(`${command}${x} ${y}`);
   });
 
-  return segments.join(' ');
+  return segments.join(" ");
 }
 
 function applyBaselineAppearance(state: LineChartInternalState): void {
@@ -416,8 +432,8 @@ function applyBaselineAppearance(state: LineChartInternalState): void {
   const stroke = baseline?.color ?? DEFAULT_BASELINE_COLOR;
   const dashArray = baseline?.dashArray ?? DEFAULT_BASELINE_DASH;
 
-  baselineLine.setAttribute('stroke', stroke);
-  baselineLine.setAttribute('stroke-dasharray', dashArray);
+  baselineLine.setAttribute("stroke", stroke);
+  baselineLine.setAttribute("stroke-dasharray", dashArray);
 }
 
 function updateBaselineLine(state: LineChartInternalState): void {
@@ -428,7 +444,7 @@ function updateBaselineLine(state: LineChartInternalState): void {
 
   const baselineValue = baseline?.value;
   if (!range || baselineValue == null || !Number.isFinite(baselineValue)) {
-    baselineLine.style.opacity = '0';
+    baselineLine.style.opacity = "0";
     return;
   }
 
@@ -436,7 +452,8 @@ function updateBaselineLine(state: LineChartInternalState): void {
   const safeMinY = Number.isFinite(minY) ? minY : baselineValue;
   const safeMaxY = Number.isFinite(maxY) ? maxY : safeMinY + 1;
   const denominator = safeMaxY - safeMinY;
-  const ratio = denominator === 0 ? 0.5 : (baselineValue - safeMinY) / denominator;
+  const ratio =
+    denominator === 0 ? 0.5 : (baselineValue - safeMinY) / denominator;
   const clampedRatio = clamp(ratio, 0, 1);
 
   const effectiveHeight = Math.max(boundedHeight, 0);
@@ -445,11 +462,11 @@ function updateBaselineLine(state: LineChartInternalState): void {
   const x1 = margin.left;
   const x2 = margin.left + effectiveWidth;
 
-  baselineLine.setAttribute('x1', x1.toFixed(2));
-  baselineLine.setAttribute('x2', x2.toFixed(2));
-  baselineLine.setAttribute('y1', y.toFixed(2));
-  baselineLine.setAttribute('y2', y.toFixed(2));
-  baselineLine.style.opacity = '1';
+  baselineLine.setAttribute("x1", x1.toFixed(2));
+  baselineLine.setAttribute("x2", x2.toFixed(2));
+  baselineLine.setAttribute("y1", y.toFixed(2));
+  baselineLine.setAttribute("y2", y.toFixed(2));
+  baselineLine.style.opacity = "1";
 }
 
 function computePoints(
@@ -480,16 +497,37 @@ function computePoints(
         yValue,
       };
     })
-    .filter((point): point is { index: number; data: LineChartInputDatum; xValue: number; yValue: number } => Boolean(point));
+    .filter(
+      (
+        point,
+      ): point is {
+        index: number;
+        data: LineChartInputDatum;
+        xValue: number;
+        yValue: number;
+      } => Boolean(point),
+    );
 
   if (rawPoints.length === 0) {
     return { points: [], range: null };
   }
 
-  const minX = rawPoints.reduce((min, point) => Math.min(min, point.xValue), rawPoints[0].xValue);
-  const maxX = rawPoints.reduce((max, point) => Math.max(max, point.xValue), rawPoints[0].xValue);
-  const minY = rawPoints.reduce((min, point) => Math.min(min, point.yValue), rawPoints[0].yValue);
-  const maxY = rawPoints.reduce((max, point) => Math.max(max, point.yValue), rawPoints[0].yValue);
+  const minX = rawPoints.reduce(
+    (min, point) => Math.min(min, point.xValue),
+    rawPoints[0].xValue,
+  );
+  const maxX = rawPoints.reduce(
+    (max, point) => Math.max(max, point.xValue),
+    rawPoints[0].xValue,
+  );
+  const minY = rawPoints.reduce(
+    (min, point) => Math.min(min, point.yValue),
+    rawPoints[0].yValue,
+  );
+  const maxY = rawPoints.reduce(
+    (max, point) => Math.max(max, point.yValue),
+    rawPoints[0].yValue,
+  );
 
   const boundedWidth = Math.max(width - margin.left - margin.right, 1);
   const boundedHeight = Math.max(height - margin.top - margin.bottom, 1);
@@ -515,9 +553,7 @@ function computePoints(
     2,
     Math.min(
       6,
-      Math.round(
-        Math.max(height - margin.top - margin.bottom, 0) / 60,
-      ) || 4,
+      Math.round(Math.max(height - margin.top - margin.bottom, 0) / 60) || 4,
     ),
   );
   const { niceMin: domainMinY, niceMax: domainMaxY } = computeNiceDomain(
@@ -558,7 +594,8 @@ function computePoints(
 }
 
 function renderMarkers(state: LineChartInternalState): void {
-  const { markerLayer, markerOverlay, markers, range, margin, markerTooltip } = state;
+  const { markerLayer, markerOverlay, markers, range, margin, markerTooltip } =
+    state;
   state.markerPositions = [];
   hideMarkerTooltip(state);
 
@@ -588,22 +625,24 @@ function renderMarkers(state: LineChartInternalState): void {
       return;
     }
 
-    const ratioX = rangeX === 0 ? 0.5 : clamp((rawX - range.minX) / rangeX, 0, 1);
-    const ratioY = rangeY === 0 ? 0.5 : clamp((yValue - range.minY) / rangeY, 0, 1);
+    const ratioX =
+      rangeX === 0 ? 0.5 : clamp((rawX - range.minX) / rangeX, 0, 1);
+    const ratioY =
+      rangeY === 0 ? 0.5 : clamp((yValue - range.minY) / rangeY, 0, 1);
     const x = margin.left + ratioX * range.boundedWidth;
     const y = margin.top + (1 - ratioY) * range.boundedHeight;
 
-    const group = createSvgElement('g', {
-      class: 'line-chart-marker',
+    const group = createSvgElement("g", {
+      class: "line-chart-marker",
       transform: `translate(${x.toFixed(2)} ${y.toFixed(2)})`,
-      'data-marker-id': marker.id,
+      "data-marker-id": marker.id,
     });
 
-    const circle = createSvgElement('circle', {
+    const circle = createSvgElement("circle", {
       r: 5,
       fill: marker.color || state.color,
-      stroke: '#fff',
-      'stroke-width': 2,
+      stroke: "#fff",
+      "stroke-width": 2,
       opacity: 0.95,
     });
 
@@ -618,8 +657,8 @@ function renderMarkers(state: LineChartInternalState): void {
   });
 
   if (markerTooltip) {
-    markerTooltip.style.opacity = '0';
-    markerTooltip.style.visibility = 'hidden';
+    markerTooltip.style.opacity = "0";
+    markerTooltip.style.visibility = "hidden";
   }
 }
 
@@ -632,14 +671,25 @@ function assignDimensions(
   state.width = Number.isFinite(width) ? Number(width) : DEFAULT_WIDTH;
   state.height = Number.isFinite(height) ? Number(height) : DEFAULT_HEIGHT;
   state.margin = {
-    top: Number.isFinite(margin?.top) ? Number(margin?.top) : DEFAULT_MARGIN.top,
-    right: Number.isFinite(margin?.right) ? Number(margin?.right) : DEFAULT_MARGIN.right,
-    bottom: Number.isFinite(margin?.bottom) ? Number(margin?.bottom) : DEFAULT_MARGIN.bottom,
-    left: Number.isFinite(margin?.left) ? Number(margin?.left) : DEFAULT_MARGIN.left,
+    top: Number.isFinite(margin?.top)
+      ? Number(margin?.top)
+      : DEFAULT_MARGIN.top,
+    right: Number.isFinite(margin?.right)
+      ? Number(margin?.right)
+      : DEFAULT_MARGIN.right,
+    bottom: Number.isFinite(margin?.bottom)
+      ? Number(margin?.bottom)
+      : DEFAULT_MARGIN.bottom,
+    left: Number.isFinite(margin?.left)
+      ? Number(margin?.left)
+      : DEFAULT_MARGIN.left,
   };
 }
 
-function formatTooltip(state: LineChartInternalState, point: LineChartComputedPoint): string {
+function formatTooltip(
+  state: LineChartInternalState,
+  point: LineChartComputedPoint,
+): string {
   const xFormatted = state.xFormatter(point.xValue, point.data, point.index);
   const yFormatted = state.yFormatter(point.yValue, point.data, point.index);
   return state.tooltipRenderer({
@@ -662,11 +712,17 @@ function updateTooltipPosition(
     return;
   }
 
-  const scaleX = geometry && Number.isFinite(geometry.scaleX) && geometry.scaleX > 0 ? geometry.scaleX : 1;
-  const scaleY = geometry && Number.isFinite(geometry.scaleY) && geometry.scaleY > 0 ? geometry.scaleY : 1;
+  const scaleX =
+    geometry && Number.isFinite(geometry.scaleX) && geometry.scaleX > 0
+      ? geometry.scaleX
+      : 1;
+  const scaleY =
+    geometry && Number.isFinite(geometry.scaleY) && geometry.scaleY > 0
+      ? geometry.scaleY
+      : 1;
   const baselineY = height - margin.bottom;
-  tooltip.style.visibility = 'visible';
-  tooltip.style.opacity = '1';
+  tooltip.style.visibility = "visible";
+  tooltip.style.opacity = "1";
   const tooltipWidth = tooltip.offsetWidth || 0;
   const tooltipHeight = tooltip.offsetHeight || 0;
   const pointXClient = point.x * scaleX;
@@ -694,14 +750,14 @@ function updateTooltipPosition(
 function hideTooltip(state: LineChartInternalState): void {
   const { tooltip, focusLine, focusCircle } = state;
   if (tooltip) {
-    tooltip.style.opacity = '0';
-    tooltip.style.visibility = 'hidden';
+    tooltip.style.opacity = "0";
+    tooltip.style.visibility = "hidden";
   }
   if (focusLine) {
-    focusLine.style.opacity = '0';
+    focusLine.style.opacity = "0";
   }
   if (focusCircle) {
-    focusCircle.style.opacity = '0';
+    focusCircle.style.opacity = "0";
   }
 }
 
@@ -730,11 +786,17 @@ function updateMarkerTooltipPosition(
     return;
   }
 
-  const scaleX = geometry && Number.isFinite(geometry.scaleX) && geometry.scaleX > 0 ? geometry.scaleX : 1;
-  const scaleY = geometry && Number.isFinite(geometry.scaleY) && geometry.scaleY > 0 ? geometry.scaleY : 1;
+  const scaleX =
+    geometry && Number.isFinite(geometry.scaleX) && geometry.scaleX > 0
+      ? geometry.scaleX
+      : 1;
+  const scaleY =
+    geometry && Number.isFinite(geometry.scaleY) && geometry.scaleY > 0
+      ? geometry.scaleY
+      : 1;
   const baselineY = height - margin.bottom;
-  markerTooltip.style.visibility = 'visible';
-  markerTooltip.style.opacity = '1';
+  markerTooltip.style.visibility = "visible";
+  markerTooltip.style.opacity = "1";
   const tooltipWidth = markerTooltip.offsetWidth || 0;
   const tooltipHeight = markerTooltip.offsetHeight || 0;
   const entryXClient = entry.x * scaleX;
@@ -748,7 +810,8 @@ function updateMarkerTooltipPosition(
 
   const priceTooltipRect = tooltip?.getBoundingClientRect();
   const svgRect = state.svg?.getBoundingClientRect();
-  const priceTop = priceTooltipRect && svgRect ? priceTooltipRect.top - svgRect.top : null;
+  const priceTop =
+    priceTooltipRect && svgRect ? priceTooltipRect.top - svgRect.top : null;
   const priceBottom =
     priceTooltipRect && svgRect ? priceTooltipRect.bottom - svgRect.top : null;
 
@@ -781,8 +844,8 @@ function updateMarkerTooltipPosition(
 function hideMarkerTooltip(state: LineChartInternalState): void {
   const { markerTooltip } = state;
   if (markerTooltip) {
-    markerTooltip.style.opacity = '0';
-    markerTooltip.style.visibility = 'hidden';
+    markerTooltip.style.opacity = "0";
+    markerTooltip.style.visibility = "hidden";
   }
 }
 
@@ -827,11 +890,17 @@ function attachPointerHandlers(
     const viewBoxWidth = state.width || DEFAULT_WIDTH;
     const viewBoxHeight = state.height || DEFAULT_HEIGHT;
     const scaleX =
-      rect.width && Number.isFinite(rect.width) && Number.isFinite(viewBoxWidth) && viewBoxWidth > 0
+      rect.width &&
+      Number.isFinite(rect.width) &&
+      Number.isFinite(viewBoxWidth) &&
+      viewBoxWidth > 0
         ? rect.width / viewBoxWidth
         : 1;
     const scaleY =
-      rect.height && Number.isFinite(rect.height) && Number.isFinite(viewBoxHeight) && viewBoxHeight > 0
+      rect.height &&
+      Number.isFinite(rect.height) &&
+      Number.isFinite(viewBoxHeight) &&
+      viewBoxHeight > 0
         ? rect.height / viewBoxHeight
         : 1;
     const clientToViewBoxX = scaleX > 0 ? 1 / scaleX : 1;
@@ -856,20 +925,20 @@ function attachPointerHandlers(
     }
 
     if (state.focusCircle) {
-      state.focusCircle.setAttribute('cx', closest.x.toFixed(2));
-      state.focusCircle.setAttribute('cy', closest.y.toFixed(2));
-      state.focusCircle.style.opacity = '1';
+      state.focusCircle.setAttribute("cx", closest.x.toFixed(2));
+      state.focusCircle.setAttribute("cy", closest.y.toFixed(2));
+      state.focusCircle.style.opacity = "1";
     }
 
     if (state.focusLine) {
-      state.focusLine.setAttribute('x1', closest.x.toFixed(2));
-      state.focusLine.setAttribute('x2', closest.x.toFixed(2));
-      state.focusLine.setAttribute('y1', state.margin.top.toFixed(2));
+      state.focusLine.setAttribute("x1", closest.x.toFixed(2));
+      state.focusLine.setAttribute("x2", closest.x.toFixed(2));
+      state.focusLine.setAttribute("y1", state.margin.top.toFixed(2));
       state.focusLine.setAttribute(
-        'y2',
+        "y2",
         (state.height - state.margin.bottom).toFixed(2),
       );
-      state.focusLine.style.opacity = '1';
+      state.focusLine.style.opacity = "1";
     }
 
     if (state.tooltip) {
@@ -891,83 +960,83 @@ function attachPointerHandlers(
     hideMarkerTooltip(state);
   };
 
-  state.overlay.addEventListener('pointermove', handlePointerMove);
-  state.overlay.addEventListener('pointerenter', handlePointerMove);
-  state.overlay.addEventListener('pointerleave', handlePointerLeave);
+  state.overlay.addEventListener("pointermove", handlePointerMove);
+  state.overlay.addEventListener("pointerenter", handlePointerMove);
+  state.overlay.addEventListener("pointerleave", handlePointerLeave);
 
   state.handlersAttached = true;
   state.handlePointerMove = handlePointerMove;
   state.handlePointerLeave = handlePointerLeave;
 
-  container.addEventListener('pointercancel', handlePointerLeave);
+  container.addEventListener("pointercancel", handlePointerLeave);
 }
 
 export function renderLineChart(
   root: HTMLElement,
   options: LineChartOptions = {},
 ): LineChartContainerElement | null {
-  const container = document.createElement('div') as LineChartContainerElement;
-  container.className = 'line-chart-container';
-  container.dataset.chartType = 'line';
-  container.style.position = 'relative';
+  const container = document.createElement("div") as LineChartContainerElement;
+  container.className = "line-chart-container";
+  container.dataset.chartType = "line";
+  container.style.position = "relative";
 
-  const svg = createSvgElement('svg', {
+  const svg = createSvgElement("svg", {
     width: DEFAULT_WIDTH,
     height: DEFAULT_HEIGHT,
     viewBox: `0 0 ${String(DEFAULT_WIDTH)} ${String(DEFAULT_HEIGHT)}`,
-    role: 'img',
-    'aria-hidden': 'true',
-    focusable: 'false',
+    role: "img",
+    "aria-hidden": "true",
+    focusable: "false",
   });
-  svg.classList.add('line-chart-svg');
+  svg.classList.add("line-chart-svg");
 
-  const areaPath = createSvgElement('path', {
-    class: 'line-chart-area',
+  const areaPath = createSvgElement("path", {
+    class: "line-chart-area",
     fill: DEFAULT_AREA,
-    stroke: 'none',
+    stroke: "none",
   });
 
-  const baselineLine = createSvgElement('line', {
-    class: 'line-chart-baseline',
+  const baselineLine = createSvgElement("line", {
+    class: "line-chart-baseline",
     stroke: DEFAULT_BASELINE_COLOR,
-    'stroke-width': 1,
-    'stroke-dasharray': DEFAULT_BASELINE_DASH,
+    "stroke-width": 1,
+    "stroke-dasharray": DEFAULT_BASELINE_DASH,
     opacity: 0,
   });
 
-  const linePath = createSvgElement('path', {
-    class: 'line-chart-path',
-    fill: 'none',
+  const linePath = createSvgElement("path", {
+    class: "line-chart-path",
+    fill: "none",
     stroke: DEFAULT_COLOR,
-    'stroke-width': 2,
-    'stroke-linecap': 'round',
-    'stroke-linejoin': 'round',
+    "stroke-width": 2,
+    "stroke-linecap": "round",
+    "stroke-linejoin": "round",
   });
 
-  const focusLine = createSvgElement('line', {
-    class: 'line-chart-focus-line',
+  const focusLine = createSvgElement("line", {
+    class: "line-chart-focus-line",
     stroke: DEFAULT_COLOR,
-    'stroke-width': 1,
-    'stroke-dasharray': '4 4',
+    "stroke-width": 1,
+    "stroke-dasharray": "4 4",
     opacity: 0,
   });
 
-  const focusCircle = createSvgElement('circle', {
-    class: 'line-chart-focus-circle',
+  const focusCircle = createSvgElement("circle", {
+    class: "line-chart-focus-circle",
     r: 4,
-    fill: '#fff',
+    fill: "#fff",
     stroke: DEFAULT_COLOR,
-    'stroke-width': 2,
+    "stroke-width": 2,
     opacity: 0,
   });
 
-  const markerLayer = createSvgElement('g', {
-    class: 'line-chart-markers',
+  const markerLayer = createSvgElement("g", {
+    class: "line-chart-markers",
   });
 
-  const overlay = createSvgElement('rect', {
-    class: 'line-chart-overlay',
-    fill: 'transparent',
+  const overlay = createSvgElement("rect", {
+    class: "line-chart-overlay",
+    fill: "transparent",
     x: 0,
     y: 0,
     width: DEFAULT_WIDTH,
@@ -984,36 +1053,36 @@ export function renderLineChart(
 
   container.appendChild(svg);
 
-  const tooltip = document.createElement('div');
-  tooltip.className = 'chart-tooltip';
-  tooltip.style.position = 'absolute';
-  tooltip.style.top = '0';
-  tooltip.style.left = '0';
-  tooltip.style.pointerEvents = 'none';
-  tooltip.style.opacity = '0';
-  tooltip.style.visibility = 'hidden';
+  const tooltip = document.createElement("div");
+  tooltip.className = "chart-tooltip";
+  tooltip.style.position = "absolute";
+  tooltip.style.top = "0";
+  tooltip.style.left = "0";
+  tooltip.style.pointerEvents = "none";
+  tooltip.style.opacity = "0";
+  tooltip.style.visibility = "hidden";
   container.appendChild(tooltip);
 
-  const markerOverlay = document.createElement('div');
-  markerOverlay.className = 'line-chart-marker-overlay';
-  markerOverlay.style.position = 'absolute';
-  markerOverlay.style.top = '0';
-  markerOverlay.style.left = '0';
-  markerOverlay.style.width = '100%';
-  markerOverlay.style.height = '100%';
-  markerOverlay.style.pointerEvents = 'none';
-  markerOverlay.style.overflow = 'visible';
-  markerOverlay.style.zIndex = '2';
+  const markerOverlay = document.createElement("div");
+  markerOverlay.className = "line-chart-marker-overlay";
+  markerOverlay.style.position = "absolute";
+  markerOverlay.style.top = "0";
+  markerOverlay.style.left = "0";
+  markerOverlay.style.width = "100%";
+  markerOverlay.style.height = "100%";
+  markerOverlay.style.pointerEvents = "none";
+  markerOverlay.style.overflow = "visible";
+  markerOverlay.style.zIndex = "2";
   container.appendChild(markerOverlay);
 
-  const markerTooltip = document.createElement('div');
-  markerTooltip.className = 'chart-tooltip chart-tooltip--marker';
-  markerTooltip.style.position = 'absolute';
-  markerTooltip.style.top = '0';
-  markerTooltip.style.left = '0';
-  markerTooltip.style.pointerEvents = 'none';
-  markerTooltip.style.opacity = '0';
-  markerTooltip.style.visibility = 'hidden';
+  const markerTooltip = document.createElement("div");
+  markerTooltip.className = "chart-tooltip chart-tooltip--marker";
+  markerTooltip.style.position = "absolute";
+  markerTooltip.style.top = "0";
+  markerTooltip.style.left = "0";
+  markerTooltip.style.pointerEvents = "none";
+  markerTooltip.style.opacity = "0";
+  markerTooltip.style.visibility = "hidden";
   container.appendChild(markerTooltip);
 
   root.appendChild(container);
@@ -1044,41 +1113,41 @@ export function renderLineChart(
   state.markers = Array.isArray(options.markers) ? options.markers.slice() : [];
 
   if (!state.xAxis) {
-    const xAxis = document.createElement('div');
-    xAxis.className = 'line-chart-axis line-chart-axis-x';
-    xAxis.style.position = 'absolute';
-    xAxis.style.left = '0';
-    xAxis.style.right = '0';
-    xAxis.style.bottom = '0';
-    xAxis.style.pointerEvents = 'none';
+    const xAxis = document.createElement("div");
+    xAxis.className = "line-chart-axis line-chart-axis-x";
+    xAxis.style.position = "absolute";
+    xAxis.style.left = "0";
+    xAxis.style.right = "0";
+    xAxis.style.bottom = "0";
+    xAxis.style.pointerEvents = "none";
     xAxis.style.fontSize = DEFAULT_TICK_FONT;
-    xAxis.style.color = 'var(--secondary-text-color)';
-    xAxis.style.display = 'block';
+    xAxis.style.color = "var(--secondary-text-color)";
+    xAxis.style.display = "block";
     container.appendChild(xAxis);
     state.xAxis = xAxis;
   }
 
   if (!state.yAxis) {
-    const yAxis = document.createElement('div');
-    yAxis.className = 'line-chart-axis line-chart-axis-y';
-    yAxis.style.position = 'absolute';
-    yAxis.style.top = '0';
-    yAxis.style.bottom = '0';
-    yAxis.style.left = '0';
-    yAxis.style.pointerEvents = 'none';
+    const yAxis = document.createElement("div");
+    yAxis.className = "line-chart-axis line-chart-axis-y";
+    yAxis.style.position = "absolute";
+    yAxis.style.top = "0";
+    yAxis.style.bottom = "0";
+    yAxis.style.left = "0";
+    yAxis.style.pointerEvents = "none";
     yAxis.style.fontSize = DEFAULT_TICK_FONT;
-    yAxis.style.color = 'var(--secondary-text-color)';
-    yAxis.style.display = 'block';
+    yAxis.style.color = "var(--secondary-text-color)";
+    yAxis.style.display = "block";
     container.appendChild(yAxis);
     state.yAxis = yAxis;
   }
 
   assignDimensions(state, options.width, options.height, options.margin);
 
-  linePath.setAttribute('stroke', state.color);
-  focusLine.setAttribute('stroke', state.color);
-  focusCircle.setAttribute('stroke', state.color);
-  areaPath.setAttribute('fill', state.areaColor);
+  linePath.setAttribute("stroke", state.color);
+  focusLine.setAttribute("stroke", state.color);
+  focusCircle.setAttribute("stroke", state.color);
+  areaPath.setAttribute("fill", state.areaColor);
 
   updateLineChart(container, options);
   attachPointerHandlers(container, state);
@@ -1091,13 +1160,15 @@ export function updateLineChart(
   options: LineChartOptions = {},
 ): void {
   if (!container) {
-    console.error('updateLineChart: container element is required');
+    console.error("updateLineChart: container element is required");
     return;
   }
 
   const state = ensureChartState(container);
   if (!state.svg || !state.linePath || !state.overlay) {
-    console.error('updateLineChart: chart was not initialised with renderLineChart');
+    console.error(
+      "updateLineChart: chart was not initialised with renderLineChart",
+    );
     return;
   }
 
@@ -1121,22 +1192,22 @@ export function updateLineChart(
   }
   if (options.color) {
     state.color = options.color;
-    state.linePath.setAttribute('stroke', state.color);
+    state.linePath.setAttribute("stroke", state.color);
     if (state.focusLine) {
-      state.focusLine.setAttribute('stroke', state.color);
+      state.focusLine.setAttribute("stroke", state.color);
     }
     if (state.focusCircle) {
-      state.focusCircle.setAttribute('stroke', state.color);
+      state.focusCircle.setAttribute("stroke", state.color);
     }
   }
   if (options.areaColor) {
     state.areaColor = options.areaColor;
     if (state.areaPath) {
-      state.areaPath.setAttribute('fill', state.areaColor);
+      state.areaPath.setAttribute("fill", state.areaColor);
     }
   }
 
-  if (Object.prototype.hasOwnProperty.call(options, 'baseline')) {
+  if (Object.prototype.hasOwnProperty.call(options, "baseline")) {
     state.baseline = options.baseline ?? null;
   }
 
@@ -1149,14 +1220,14 @@ export function updateLineChart(
   assignDimensions(state, options.width, options.height, options.margin);
 
   const { width, height } = state;
-  state.svg.setAttribute('width', String(width));
-  state.svg.setAttribute('height', String(height));
-  state.svg.setAttribute('viewBox', `0 0 ${String(width)} ${String(height)}`);
+  state.svg.setAttribute("width", String(width));
+  state.svg.setAttribute("height", String(height));
+  state.svg.setAttribute("viewBox", `0 0 ${String(width)} ${String(height)}`);
 
-  state.overlay.setAttribute('x', '0');
-  state.overlay.setAttribute('y', '0');
-  state.overlay.setAttribute('width', Math.max(width, 0).toFixed(2));
-  state.overlay.setAttribute('height', Math.max(height, 0).toFixed(2));
+  state.overlay.setAttribute("x", "0");
+  state.overlay.setAttribute("y", "0");
+  state.overlay.setAttribute("width", Math.max(width, 0).toFixed(2));
+  state.overlay.setAttribute("height", Math.max(height, 0).toFixed(2));
 
   if (Array.isArray(options.series)) {
     state.series = Array.from(options.series);
@@ -1170,9 +1241,9 @@ export function updateLineChart(
   state.range = range;
 
   if (points.length === 0) {
-    state.linePath.setAttribute('d', '');
+    state.linePath.setAttribute("d", "");
     if (state.areaPath) {
-      state.areaPath.setAttribute('d', '');
+      state.areaPath.setAttribute("d", "");
     }
     hideTooltip(state);
     renderMarkers(state);
@@ -1185,20 +1256,24 @@ export function updateLineChart(
     const single = points[0];
     const tinyLength = Math.max(
       0.5,
-      Math.min(4, Math.max(state.width - state.margin.left - state.margin.right, 1) * 0.01),
+      Math.min(
+        4,
+        Math.max(state.width - state.margin.left - state.margin.right, 1) *
+          0.01,
+      ),
     );
     const lineD = `M${single.x.toFixed(2)} ${single.y.toFixed(2)} h${tinyLength.toFixed(2)}`;
-    state.linePath.setAttribute('d', lineD);
+    state.linePath.setAttribute("d", lineD);
     if (state.areaPath) {
-      state.areaPath.setAttribute('d', '');
+      state.areaPath.setAttribute("d", "");
     }
     if (state.focusCircle) {
-      state.focusCircle.setAttribute('cx', single.x.toFixed(2));
-      state.focusCircle.setAttribute('cy', single.y.toFixed(2));
-      state.focusCircle.style.opacity = '1';
+      state.focusCircle.setAttribute("cx", single.x.toFixed(2));
+      state.focusCircle.setAttribute("cy", single.y.toFixed(2));
+      state.focusCircle.style.opacity = "1";
     }
     if (state.focusLine) {
-      state.focusLine.style.opacity = '0';
+      state.focusLine.style.opacity = "0";
     }
     updateAxes(state);
     updateBaselineLine(state);
@@ -1207,12 +1282,12 @@ export function updateLineChart(
   }
 
   const lineD = buildLinePath(points);
-  state.linePath.setAttribute('d', lineD);
+  state.linePath.setAttribute("d", lineD);
 
   if (state.areaPath && range) {
     const baselineY = state.margin.top + range.boundedHeight;
     const areaD = buildAreaPath(points, baselineY);
-    state.areaPath.setAttribute('d', areaD);
+    state.areaPath.setAttribute("d", areaD);
   }
 
   updateAxes(state);
@@ -1227,15 +1302,17 @@ function updateAxes(state: LineChartInternalState): void {
   }
 
   if (!range) {
-    xAxis.innerHTML = '';
-    yAxis.innerHTML = '';
+    xAxis.innerHTML = "";
+    yAxis.innerHTML = "";
     return;
   }
 
   const { minX, maxX, minY, maxY, boundedWidth, boundedHeight } = range;
 
-  const hasValidX = Number.isFinite(minX) && Number.isFinite(maxX) && maxX >= minX;
-  const hasValidY = Number.isFinite(minY) && Number.isFinite(maxY) && maxY >= minY;
+  const hasValidX =
+    Number.isFinite(minX) && Number.isFinite(maxX) && maxX >= minX;
+  const hasValidY =
+    Number.isFinite(minY) && Number.isFinite(maxY) && maxY >= minY;
 
   const effectiveWidth = Math.max(boundedWidth, 0);
   const effectiveHeight = Math.max(boundedHeight, 0);
@@ -1243,29 +1320,38 @@ function updateAxes(state: LineChartInternalState): void {
   xAxis.style.left = px(margin.left);
   xAxis.style.width = px(effectiveWidth);
   xAxis.style.top = px(height - margin.bottom + 6);
-  xAxis.innerHTML = '';
+  xAxis.innerHTML = "";
 
   if (hasValidX && effectiveWidth > 0) {
     const rangeDays = (maxX - minX) / ONE_DAY_MS;
-    const desiredTicks = Math.max(2, Math.min(6, Math.round(effectiveWidth / 140) || 4));
-    const xTicks = generateTimeAxisTicks(state, minX, maxX, desiredTicks, rangeDays);
+    const desiredTicks = Math.max(
+      2,
+      Math.min(6, Math.round(effectiveWidth / 140) || 4),
+    );
+    const xTicks = generateTimeAxisTicks(
+      state,
+      minX,
+      maxX,
+      desiredTicks,
+      rangeDays,
+    );
     xTicks.forEach(({ positionRatio, label }) => {
-      const tick = document.createElement('div');
-      tick.className = 'line-chart-axis-tick line-chart-axis-tick-x';
-      tick.style.position = 'absolute';
-      tick.style.bottom = '0';
+      const tick = document.createElement("div");
+      tick.className = "line-chart-axis-tick line-chart-axis-tick-x";
+      tick.style.position = "absolute";
+      tick.style.bottom = "0";
       const ratio = clamp(positionRatio, 0, 1);
       tick.style.left = px(ratio * effectiveWidth);
-      let translateX = '-50%';
-      let textAlign: CSSStyleDeclaration['textAlign'] = 'center';
+      let translateX = "-50%";
+      let textAlign: CSSStyleDeclaration["textAlign"] = "center";
       if (ratio <= 0.001) {
-        translateX = '0';
-        textAlign = 'left';
-        tick.style.marginLeft = '2px';
+        translateX = "0";
+        textAlign = "left";
+        tick.style.marginLeft = "2px";
       } else if (ratio >= 0.999) {
-        translateX = '-100%';
-        textAlign = 'right';
-        tick.style.marginRight = '2px';
+        translateX = "-100%";
+        textAlign = "right";
+        tick.style.marginRight = "2px";
       }
       tick.style.transform = `translateX(${translateX})`;
       tick.style.textAlign = textAlign;
@@ -1277,19 +1363,22 @@ function updateAxes(state: LineChartInternalState): void {
   yAxis.style.top = px(margin.top);
   yAxis.style.height = px(effectiveHeight);
   const yAxisWidth = Math.max(margin.left - 6, 0);
-  yAxis.style.left = '0';
+  yAxis.style.left = "0";
   yAxis.style.width = px(Math.max(yAxisWidth, 0));
-  yAxis.innerHTML = '';
+  yAxis.innerHTML = "";
 
   if (hasValidY && effectiveHeight > 0) {
-    const desiredTicks = Math.max(2, Math.min(6, Math.round(effectiveHeight / 60) || 4));
+    const desiredTicks = Math.max(
+      2,
+      Math.min(6, Math.round(effectiveHeight / 60) || 4),
+    );
     const yTicks = generateNumericAxisTicks(minY, maxY, desiredTicks);
     const applyFormatter = yFormatter;
     yTicks.forEach(({ value, positionRatio }) => {
-      const tick = document.createElement('div');
-      tick.className = 'line-chart-axis-tick line-chart-axis-tick-y';
-      tick.style.position = 'absolute';
-      tick.style.left = '0';
+      const tick = document.createElement("div");
+      tick.className = "line-chart-axis-tick line-chart-axis-tick-y";
+      tick.style.position = "absolute";
+      tick.style.left = "0";
       const clampedRatio = clamp(positionRatio, 0, 1);
       const top = (1 - clampedRatio) * effectiveHeight;
       tick.style.top = px(top);
@@ -1347,7 +1436,11 @@ function generateTimeAxisTicks(
   desiredTicks: number,
   rangeDays: number,
 ): Array<{ positionRatio: number; label: string }> {
-  if (!Number.isFinite(minTimestamp) || !Number.isFinite(maxTimestamp) || maxTimestamp < minTimestamp) {
+  if (
+    !Number.isFinite(minTimestamp) ||
+    !Number.isFinite(maxTimestamp) ||
+    maxTimestamp < minTimestamp
+  ) {
     return [];
   }
 
@@ -1386,26 +1479,26 @@ function formatXAxisLabel(
       return String(date.getFullYear());
     }
     if (rangeDays > 365) {
-      return date.toLocaleDateString('de-DE', {
-        year: 'numeric',
-        month: 'short',
+      return date.toLocaleDateString("de-DE", {
+        year: "numeric",
+        month: "short",
       });
     }
     if (rangeDays > 90) {
-      return date.toLocaleDateString('de-DE', {
-        year: '2-digit',
-        month: 'short',
+      return date.toLocaleDateString("de-DE", {
+        year: "2-digit",
+        month: "short",
       });
     }
     if (rangeDays > 30) {
-      return date.toLocaleDateString('de-DE', {
-        day: '2-digit',
-        month: 'short',
+      return date.toLocaleDateString("de-DE", {
+        day: "2-digit",
+        month: "short",
       });
     }
-    return date.toLocaleDateString('de-DE', {
-      day: '2-digit',
-      month: '2-digit',
+    return date.toLocaleDateString("de-DE", {
+      day: "2-digit",
+      month: "2-digit",
     });
   }
 

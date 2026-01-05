@@ -7,7 +7,8 @@ import type {
   PerformanceMetricsPayload,
 } from "../tabs/types";
 
-const NUMERIC_STRING_PATTERN = /^[+-]?(?:\d+\.?\d*|\d*\.?\d+)(?:[eE][+-]?\d+)?$/;
+const NUMERIC_STRING_PATTERN =
+  /^[+-]?(?:\d+\.?\d*|\d*\.?\d+)(?:[eE][+-]?\d+)?$/;
 
 const toFiniteNumber = (value: unknown): number | null => {
   if (typeof value === "number") {
@@ -41,8 +42,11 @@ const toOptionalString = (value: unknown): string | null => {
   return trimmed ? trimmed : null;
 };
 
-function normalizeDayChangePayload(raw: unknown): PerformanceDayChangePayload | null {
-  const candidate = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+function normalizeDayChangePayload(
+  raw: unknown,
+): PerformanceDayChangePayload | null {
+  const candidate =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
   if (!candidate) {
     return null;
   }
@@ -50,7 +54,9 @@ function normalizeDayChangePayload(raw: unknown): PerformanceDayChangePayload | 
   const priceChangeNative = toFiniteNumber(candidate.price_change_native);
   const priceChangeEur = toFiniteNumber(candidate.price_change_eur);
   const changePct = toFiniteNumber(candidate.change_pct);
-  const valueChangeEur = toFiniteNumber((candidate as { value_change_eur?: unknown }).value_change_eur);
+  const valueChangeEur = toFiniteNumber(
+    (candidate as { value_change_eur?: unknown }).value_change_eur,
+  );
 
   if (
     priceChangeNative == null &&
@@ -77,7 +83,8 @@ function normalizeDayChangePayload(raw: unknown): PerformanceDayChangePayload | 
 export function normalizePerformancePayload(
   raw: unknown,
 ): PerformanceMetricsPayload | null {
-  const candidate = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
+  const candidate =
+    raw && typeof raw === "object" ? (raw as Record<string, unknown>) : null;
   if (!candidate) {
     return null;
   }
@@ -87,7 +94,12 @@ export function normalizePerformancePayload(
   const totalChangeEur = toFiniteNumber(candidate.total_change_eur);
   const totalChangePct = toFiniteNumber(candidate.total_change_pct);
 
-  if (gainAbs == null || gainPct == null || totalChangeEur == null || totalChangePct == null) {
+  if (
+    gainAbs == null ||
+    gainPct == null ||
+    totalChangeEur == null ||
+    totalChangePct == null
+  ) {
     return null;
   }
 

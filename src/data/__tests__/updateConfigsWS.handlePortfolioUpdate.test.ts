@@ -1,8 +1,8 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { installDomEnvironment } from '../../__tests__/dom';
-import { handlePortfolioUpdate } from '../updateConfigsWS';
-import { __TEST_ONLY__ as storeTestHelpers } from '../../lib/store/portfolioStore';
+import test from "node:test";
+import assert from "node:assert/strict";
+import { installDomEnvironment } from "../../__tests__/dom";
+import { handlePortfolioUpdate } from "../updateConfigsWS";
+import { __TEST_ONLY__ as storeTestHelpers } from "../../lib/store/portfolioStore";
 
 const TABLE_MARKUP = `
 <!doctype html>
@@ -42,19 +42,19 @@ const TABLE_MARKUP = `
 </html>
 `;
 
-void test('handlePortfolioUpdate keeps day change columns aligned with updated payloads', () => {
+void test("handlePortfolioUpdate keeps day change columns aligned with updated payloads", () => {
   storeTestHelpers.reset();
   const env = installDomEnvironment(TABLE_MARKUP);
 
   try {
-    const root = env.document.getElementById('root');
+    const root = env.document.getElementById("root");
     assert.ok(root);
 
     handlePortfolioUpdate(
       [
         {
-          uuid: 'portfolio-1',
-          name: 'Test Depot',
+          uuid: "portfolio-1",
+          name: "Test Depot",
           position_count: 10,
           purchase_sum: 1000,
           current_value: 1200,
@@ -73,26 +73,26 @@ void test('handlePortfolioUpdate keeps day change columns aligned with updated p
       root,
     );
 
-    const row = root.querySelector<HTMLTableRowElement>('tr.portfolio-row');
+    const row = root.querySelector<HTMLTableRowElement>("tr.portfolio-row");
     assert.ok(row);
 
     const cells = row.cells;
-    assert.ok(cells.item(2)?.innerHTML.includes('1.000,00'));
-    assert.ok(cells.item(3)?.innerHTML.includes('1.200,00'));
+    assert.ok(cells.item(2)?.innerHTML.includes("1.000,00"));
+    assert.ok(cells.item(3)?.innerHTML.includes("1.200,00"));
 
-    const dayChangeAbsHtml = cells.item(4)?.innerHTML ?? '';
-    assert.ok(dayChangeAbsHtml.includes('5,00'));
-    assert.ok(dayChangeAbsHtml.includes('\u20ac'));
-    assert.ok(!dayChangeAbsHtml.includes('%'));
+    const dayChangeAbsHtml = cells.item(4)?.innerHTML ?? "";
+    assert.ok(dayChangeAbsHtml.includes("5,00"));
+    assert.ok(dayChangeAbsHtml.includes("\u20ac"));
+    assert.ok(!dayChangeAbsHtml.includes("%"));
 
-    const dayChangePctHtml = cells.item(5)?.innerHTML ?? '';
-    assert.ok(dayChangePctHtml.includes('0,42'));
-    assert.ok(dayChangePctHtml.includes('%'));
+    const dayChangePctHtml = cells.item(5)?.innerHTML ?? "";
+    assert.ok(dayChangePctHtml.includes("0,42"));
+    assert.ok(dayChangePctHtml.includes("%"));
 
-    assert.strictEqual(row.dataset.dayChange, '5');
-    assert.ok((row.dataset.dayChangePct ?? '').startsWith('0.42'));
-    assert.strictEqual(row.dataset.currentValue, '1200');
-    assert.strictEqual(row.dataset.purchaseSum, '1000');
+    assert.strictEqual(row.dataset.dayChange, "5");
+    assert.ok((row.dataset.dayChangePct ?? "").startsWith("0.42"));
+    assert.strictEqual(row.dataset.currentValue, "1200");
+    assert.strictEqual(row.dataset.purchaseSum, "1000");
   } finally {
     env.restore();
     storeTestHelpers.reset();

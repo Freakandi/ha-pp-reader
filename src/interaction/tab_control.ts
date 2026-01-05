@@ -6,9 +6,12 @@ export type SwipeCallback = () => void;
 
 const DEFAULT_SWIPE_THRESHOLD = 50;
 
-type SwipeDirection = 'left' | 'right';
+type SwipeDirection = "left" | "right";
 
-function triggerSwipe(direction: SwipeDirection, callback: SwipeCallback): void {
+function triggerSwipe(
+  direction: SwipeDirection,
+  callback: SwipeCallback,
+): void {
   try {
     callback();
   } catch (error) {
@@ -25,9 +28,9 @@ export function addSwipeEvents(
 
   const handleSwipe = (deltaX: number): void => {
     if (deltaX < -DEFAULT_SWIPE_THRESHOLD) {
-      triggerSwipe('left', onSwipeLeft);
+      triggerSwipe("left", onSwipeLeft);
     } else if (deltaX > DEFAULT_SWIPE_THRESHOLD) {
-      triggerSwipe('right', onSwipeRight);
+      triggerSwipe("right", onSwipeRight);
     }
   };
 
@@ -62,12 +65,15 @@ export function addSwipeEvents(
     startX = null;
   };
 
-  element.addEventListener('touchstart', handleTouchStart, { passive: true });
-  element.addEventListener('touchend', handleTouchEnd, { passive: true });
-  element.addEventListener('mousedown', handleMouseDown);
-  element.addEventListener('mouseup', handleMouseUp);
+  element.addEventListener("touchstart", handleTouchStart, { passive: true });
+  element.addEventListener("touchend", handleTouchEnd, { passive: true });
+  element.addEventListener("mousedown", handleMouseDown);
+  element.addEventListener("mouseup", handleMouseUp);
 }
 
-export function goToTab(targetIndex: number, onTabChange: (index: number) => void): void {
+export function goToTab(
+  targetIndex: number,
+  onTabChange: (index: number) => void,
+): void {
   onTabChange(targetIndex);
 }

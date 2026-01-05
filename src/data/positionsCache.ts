@@ -7,18 +7,18 @@
  * consumers from mutating the shared state.
  */
 
-import type { NormalizedPositionSnapshot } from '../lib/api/portfolio';
+import type { NormalizedPositionSnapshot } from "../lib/api/portfolio";
 import type {
   AverageCostPayload,
   HoldingsAggregationPayload,
   PerformanceMetricsPayload,
-} from '../tabs/types';
-import { normalizeCurrencyValue, toFiniteCurrency } from '../utils/currency';
-import { normalizePerformancePayload } from '../utils/performance';
+} from "../tabs/types";
+import { normalizeCurrencyValue, toFiniteCurrency } from "../utils/currency";
+import { normalizePerformancePayload } from "../utils/performance";
 
 type BasePositionSnapshot = Omit<
   NormalizedPositionSnapshot,
-  'average_cost' | 'aggregation' | 'performance'
+  "average_cost" | "aggregation" | "performance"
 >;
 
 export type PortfolioPositionRecord = BasePositionSnapshot & {
@@ -34,7 +34,7 @@ export type PortfolioPositionRecord = BasePositionSnapshot & {
 const portfolioPositionsCache = new Map<string, PortfolioPositionRecord[]>();
 
 function toNonEmptyString(value: unknown): string | null {
-  if (typeof value !== 'string') {
+  if (typeof value !== "string") {
     return null;
   }
   const trimmed = value.trim();
@@ -49,32 +49,36 @@ function toNullableNumber(value: unknown): number | null {
   return Number.isFinite(numeric ?? NaN) ? (numeric as number) : null;
 }
 
-function isPortfolioPositionRecord(value: unknown): value is PortfolioPositionRecord {
-  if (!value || typeof value !== 'object') {
+function isPortfolioPositionRecord(
+  value: unknown,
+): value is PortfolioPositionRecord {
+  if (!value || typeof value !== "object") {
     return false;
   }
   const record = value as Record<string, unknown>;
   return (
-    typeof record.security_uuid === 'string' &&
-    typeof record.name === 'string' &&
-    typeof record.current_holdings === 'number' &&
-    typeof record.purchase_value === 'number' &&
-    typeof record.current_value === 'number'
+    typeof record.security_uuid === "string" &&
+    typeof record.name === "string" &&
+    typeof record.current_holdings === "number" &&
+    typeof record.purchase_value === "number" &&
+    typeof record.current_value === "number"
   );
 }
 
-function clonePosition(position: PortfolioPositionRecord): PortfolioPositionRecord {
+function clonePosition(
+  position: PortfolioPositionRecord,
+): PortfolioPositionRecord {
   const clone: PortfolioPositionRecord = { ...position };
-  if (position.average_cost && typeof position.average_cost === 'object') {
+  if (position.average_cost && typeof position.average_cost === "object") {
     clone.average_cost = { ...position.average_cost };
   }
-  if (position.performance && typeof position.performance === 'object') {
+  if (position.performance && typeof position.performance === "object") {
     clone.performance = { ...position.performance };
   }
-  if (position.aggregation && typeof position.aggregation === 'object') {
+  if (position.aggregation && typeof position.aggregation === "object") {
     clone.aggregation = { ...position.aggregation };
   }
-  if (position.data_state && typeof position.data_state === 'object') {
+  if (position.data_state && typeof position.data_state === "object") {
     clone.data_state = { ...position.data_state };
   }
   return clone;
@@ -85,16 +89,16 @@ function mergeObjectWithPreservedKeys(
   patch: Record<string, unknown> | null,
   preserveKeys: readonly string[] = [],
 ): Record<string, unknown> | null {
-  if (!patch || typeof patch !== 'object') {
+  if (!patch || typeof patch !== "object") {
     return patch;
   }
 
   const merged = {
-    ...(base && typeof base === 'object' ? base : {}),
+    ...(base && typeof base === "object" ? base : {}),
     ...patch,
   };
 
-  preserveKeys.forEach(key => {
+  preserveKeys.forEach((key) => {
     const value = base?.[key];
     if (value !== undefined && value !== null) {
       (merged as Record<string, unknown>)[key] = value;
@@ -111,18 +115,18 @@ function mergePositionRecords(
   const merged = base ? clonePosition(base) : ({} as PortfolioPositionRecord);
 
   const shallowKeys: (keyof PortfolioPositionRecord)[] = [
-    'portfolio_uuid',
-    'security_uuid',
-    'name',
-    'ticker_symbol',
-    'currency_code',
-    'current_holdings',
-    'purchase_value',
-    'current_value',
-    'coverage_ratio',
-    'provenance',
-    'metric_run_uuid',
-    'fx_unavailable',
+    "portfolio_uuid",
+    "security_uuid",
+    "name",
+    "ticker_symbol",
+    "currency_code",
+    "current_holdings",
+    "purchase_value",
+    "current_value",
+    "coverage_ratio",
+    "provenance",
+    "metric_run_uuid",
+    "fx_unavailable",
   ];
 
   const assignIfDefined = (
@@ -136,15 +140,15 @@ function mergePositionRecords(
     }
   };
 
-  shallowKeys.forEach(key => {
+  shallowKeys.forEach((key) => {
     assignIfDefined(merged, patch, key);
   });
 
   const mergeObjectField = (field: keyof PortfolioPositionRecord) => {
     const value = patch[field];
-    if (value && typeof value === 'object') {
+    if (value && typeof value === "object") {
       const baseObj =
-        base && base[field] && typeof base[field] === 'object'
+        base && base[field] && typeof base[field] === "object"
           ? (base[field] as Record<string, unknown>)
           : {};
       merged[field] = {
@@ -156,22 +160,26 @@ function mergePositionRecords(
     }
   };
 
-  const performancePatch = patch.performance as Record<string, unknown> | null | undefined;
+  const performancePatch = patch.performance as
+    | Record<string, unknown>
+    | null
+    | undefined;
   const basePerformance =
-    base && base.performance && typeof base.performance === 'object'
+    base && base.performance && typeof base.performance === "object"
       ? (base.performance as Record<string, unknown>)
       : undefined;
 
   if (performancePatch !== undefined) {
-    merged.performance = mergeObjectWithPreservedKeys(basePerformance, performancePatch, [
-      'gain_pct',
-      'total_change_pct',
-    ]) as PortfolioPositionRecord['performance'];
+    merged.performance = mergeObjectWithPreservedKeys(
+      basePerformance,
+      performancePatch,
+      ["gain_pct", "total_change_pct"],
+    ) as PortfolioPositionRecord["performance"];
   }
 
-  mergeObjectField('aggregation');
-  mergeObjectField('average_cost');
-  mergeObjectField('data_state');
+  mergeObjectField("aggregation");
+  mergeObjectField("average_cost");
+  mergeObjectField("data_state");
 
   return merged;
 }
@@ -197,14 +205,16 @@ export function setPortfolioPositions(
   const existing = portfolioPositionsCache.get(portfolioUuid) ?? [];
   const existingBySecurity = new Map(
     existing
-      .filter(entry => entry.security_uuid)
-      .map(entry => [entry.security_uuid as string, entry]),
+      .filter((entry) => entry.security_uuid)
+      .map((entry) => [entry.security_uuid as string, entry]),
   );
 
   const merged = positions
-    .filter((candidate): candidate is PortfolioPositionRecord => Boolean(candidate))
-    .map(patch => {
-      const key = patch.security_uuid ?? '';
+    .filter((candidate): candidate is PortfolioPositionRecord =>
+      Boolean(candidate),
+    )
+    .map((patch) => {
+      const key = patch.security_uuid ?? "";
       const base = key ? existingBySecurity.get(key) : undefined;
       return mergePositionRecords(base, patch);
     })
@@ -214,7 +224,9 @@ export function setPortfolioPositions(
   return merged.map(clonePosition);
 }
 
-export function hasPortfolioPositions(portfolioUuid: string | null | undefined): boolean {
+export function hasPortfolioPositions(
+  portfolioUuid: string | null | undefined,
+): boolean {
   if (!portfolioUuid) {
     return false;
   }
@@ -234,7 +246,9 @@ export function getPortfolioPositions(
   return entries.map(clonePosition);
 }
 
-export function clearPortfolioPositions(portfolioUuid: string | null | undefined): void {
+export function clearPortfolioPositions(
+  portfolioUuid: string | null | undefined,
+): void {
   if (!portfolioUuid) {
     return;
   }
@@ -245,17 +259,25 @@ export function clearAllPortfolioPositions(): void {
   portfolioPositionsCache.clear();
 }
 
-export function getPortfolioPositionsSnapshot(): ReadonlyMap<string, PortfolioPositionRecord[]> {
+export function getPortfolioPositionsSnapshot(): ReadonlyMap<
+  string,
+  PortfolioPositionRecord[]
+> {
   return new Map(
-    Array.from(portfolioPositionsCache.entries(), ([portfolioUuid, positions]) => [
-      portfolioUuid,
-      positions.map(clonePosition),
-    ]),
+    Array.from(
+      portfolioPositionsCache.entries(),
+      ([portfolioUuid, positions]) => [
+        portfolioUuid,
+        positions.map(clonePosition),
+      ],
+    ),
   );
 }
 
-export function normalizeAverageCostPayload(value: unknown): AverageCostPayload | null {
-  if (!value || typeof value !== 'object') {
+export function normalizeAverageCostPayload(
+  value: unknown,
+): AverageCostPayload | null {
+  if (!value || typeof value !== "object") {
     return null;
   }
   const record = value as Record<string, unknown>;
@@ -276,8 +298,8 @@ export function normalizeAverageCostPayload(value: unknown): AverageCostPayload 
   }
 
   const source = toNonEmptyString(record.source);
-  const normalizedSource: AverageCostPayload['source'] =
-    source === 'totals' || source === 'eur_total' ? source : 'aggregation';
+  const normalizedSource: AverageCostPayload["source"] =
+    source === "totals" || source === "eur_total" ? source : "aggregation";
 
   return {
     native,
@@ -292,7 +314,7 @@ export function normalizeAverageCostPayload(value: unknown): AverageCostPayload 
 export function normalizeAggregationPayload(
   value: unknown,
 ): HoldingsAggregationPayload | null {
-  if (!value || typeof value !== 'object') {
+  if (!value || typeof value !== "object") {
     return null;
   }
   const record = value as Record<string, unknown>;
@@ -308,11 +330,11 @@ export function normalizeAggregationPayload(
     toNullableNumber(record.account_currency_total);
 
   let purchaseValueCents = 0;
-  if (typeof record.purchase_value_cents === 'number') {
+  if (typeof record.purchase_value_cents === "number") {
     purchaseValueCents = Number.isFinite(record.purchase_value_cents)
       ? Math.trunc(record.purchase_value_cents)
       : 0;
-  } else if (typeof record.purchase_value_cents === 'string') {
+  } else if (typeof record.purchase_value_cents === "string") {
     const parsed = Number.parseInt(record.purchase_value_cents, 10);
     if (Number.isFinite(parsed)) {
       purchaseValueCents = parsed;
@@ -343,8 +365,10 @@ export function normalizeAggregationPayload(
   };
 }
 
-export function normalizePositionRecord(value: unknown): PortfolioPositionRecord | null {
-  if (!value || typeof value !== 'object') {
+export function normalizePositionRecord(
+  value: unknown,
+): PortfolioPositionRecord | null {
+  if (!value || typeof value !== "object") {
     return null;
   }
   const record = isPortfolioPositionRecord(value)
@@ -356,11 +380,13 @@ export function normalizePositionRecord(value: unknown): PortfolioPositionRecord
   const currentValue = normalizeCurrencyValue(record.current_value);
   const aggregation = normalizeAggregationPayload(record.aggregation);
   const aggregationRaw =
-    record.aggregation && typeof record.aggregation === 'object'
+    record.aggregation && typeof record.aggregation === "object"
       ? (record.aggregation as Record<string, unknown>)
       : null;
   const purchaseValue =
-    toNullableNumber((record as { purchase_value_eur?: unknown }).purchase_value_eur) ??
+    toNullableNumber(
+      (record as { purchase_value_eur?: unknown }).purchase_value_eur,
+    ) ??
     toNullableNumber(aggregationRaw?.purchase_value_eur) ??
     toNullableNumber(aggregationRaw?.purchase_total_account) ??
     toNullableNumber(aggregationRaw?.account_currency_total) ??
@@ -380,7 +406,9 @@ export function normalizePositionRecord(value: unknown): PortfolioPositionRecord
     security_uuid: securityUuid,
     name,
     portfolio_uuid:
-      toNonEmptyString(record.portfolio_uuid) ?? toNonEmptyString(record.portfolioUuid) ?? undefined,
+      toNonEmptyString(record.portfolio_uuid) ??
+      toNonEmptyString(record.portfolioUuid) ??
+      undefined,
     currency_code: toNonEmptyString(record.currency_code),
     current_holdings: currentHoldings,
     purchase_value: purchaseValue,
@@ -398,9 +426,9 @@ export function normalizePositionRecord(value: unknown): PortfolioPositionRecord
   if (performance) {
     normalized.performance = performance;
     normalized.gain_abs =
-      typeof performance.gain_abs === 'number' ? performance.gain_abs : null;
+      typeof performance.gain_abs === "number" ? performance.gain_abs : null;
     normalized.gain_pct =
-      typeof performance.gain_pct === 'number' ? performance.gain_pct : null;
+      typeof performance.gain_pct === "number" ? performance.gain_pct : null;
   } else {
     const gainAbs = toNullableNumber(record.gain_abs);
     const gainPct = toNullableNumber(record.gain_pct);
@@ -412,7 +440,7 @@ export function normalizePositionRecord(value: unknown): PortfolioPositionRecord
     }
   }
 
-  if ('coverage_ratio' in record) {
+  if ("coverage_ratio" in record) {
     normalized.coverage_ratio = toNullableNumber(record.coverage_ratio);
   }
   const provenance = toNonEmptyString(record.provenance);
@@ -442,7 +470,7 @@ export function normalizePositionRecord(value: unknown): PortfolioPositionRecord
   }
 
   const dataState =
-    record.data_state && typeof record.data_state === 'object'
+    record.data_state && typeof record.data_state === "object"
       ? { ...(record.data_state as Record<string, unknown>) }
       : undefined;
   if (dataState) {
@@ -452,7 +480,9 @@ export function normalizePositionRecord(value: unknown): PortfolioPositionRecord
   return normalized;
 }
 
-export function normalizePositionRecords(positions: unknown): PortfolioPositionRecord[] {
+export function normalizePositionRecords(
+  positions: unknown,
+): PortfolioPositionRecord[] {
   if (!Array.isArray(positions)) {
     return [];
   }

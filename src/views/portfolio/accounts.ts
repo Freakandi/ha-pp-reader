@@ -9,44 +9,44 @@ import {
   createHeaderCard,
   formatNumber,
   makeTable,
-} from '../../content/elements';
-import { fetchAccountsWS } from '../../data/api';
-import { setAccountSnapshots } from '../../lib/store/portfolioStore';
+} from "../../content/elements";
+import { fetchAccountsWS } from "../../data/api";
+import { setAccountSnapshots } from "../../lib/store/portfolioStore";
 import {
   selectAccountOverviewRows,
   type AccountOverviewRow,
-} from '../../lib/store/selectors/portfolio';
-import { renderNameWithBadges, escapeHtml } from '../../lib/ui/badges';
-import type { PanelConfigLike } from '../../tabs/types';
-import type { HomeAssistant } from '../../types/home-assistant';
+} from "../../lib/store/selectors/portfolio";
+import { renderNameWithBadges, escapeHtml } from "../../lib/ui/badges";
+import type { PanelConfigLike } from "../../tabs/types";
+import type { HomeAssistant } from "../../types/home-assistant";
 
-export const ACCOUNTS_TAB_KEY = 'accounts';
+export const ACCOUNTS_TAB_KEY = "accounts";
 
-const ACCOUNT_TAB_TITLE = 'Konten';
+const ACCOUNT_TAB_TITLE = "Konten";
 
 interface AccountPartitions {
   eur: AccountOverviewRow[];
   fx: AccountOverviewRow[];
 }
 
-type AccountBadgeList = AccountOverviewRow['badges'];
+type AccountBadgeList = AccountOverviewRow["badges"];
 
-function visibleAccountBadges(badges: AccountBadgeList | undefined): AccountBadgeList {
+function visibleAccountBadges(
+  badges: AccountBadgeList | undefined,
+): AccountBadgeList {
   return (badges ?? []).filter(
     (badge) =>
-      !badge.key.endsWith('-coverage') && !badge.key.startsWith('provenance-'),
+      !badge.key.endsWith("-coverage") && !badge.key.startsWith("provenance-"),
   );
 }
 
-function partitionAccounts(
-  rows: AccountOverviewRow[],
-): AccountPartitions {
+function partitionAccounts(rows: AccountOverviewRow[]): AccountPartitions {
   const eur: AccountOverviewRow[] = [];
   const fx: AccountOverviewRow[] = [];
 
   for (const account of rows) {
-    const currency = (account.currency_code ?? '').toUpperCase() || 'EUR';
-    if (currency === 'EUR') {
+    const currency = (account.currency_code ?? "").toUpperCase() || "EUR";
+    if (currency === "EUR") {
       eur.push(account);
     } else {
       fx.push(account);
@@ -58,7 +58,10 @@ function partitionAccounts(
 
 function sumBalances(rows: AccountOverviewRow[]): number {
   return rows.reduce((sum, account) => {
-    if (typeof account.balance === 'number' && Number.isFinite(account.balance)) {
+    if (
+      typeof account.balance === "number" &&
+      Number.isFinite(account.balance)
+    ) {
       return sum + account.balance;
     }
     return sum;
@@ -70,22 +73,25 @@ function formatEuroLabel(value: number): string {
 }
 
 function formatOriginalBalance(account: AccountOverviewRow): string {
-  if (typeof account.orig_balance !== 'number' || !Number.isFinite(account.orig_balance)) {
-    return '—';
+  if (
+    typeof account.orig_balance !== "number" ||
+    !Number.isFinite(account.orig_balance)
+  ) {
+    return "—";
   }
-  const currency = account.currency_code ?? '';
-  const amount = account.orig_balance.toLocaleString('de-DE', {
+  const currency = account.currency_code ?? "";
+  const amount = account.orig_balance.toLocaleString("de-DE", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
   });
-  return `${amount}${currency ? `\u00A0${currency}` : ''}`;
+  return `${amount}${currency ? `\u00A0${currency}` : ""}`;
 }
 
 function formatFxRate(value: number | null): string | null {
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
     return null;
   }
-  return value.toLocaleString('de-DE', {
+  return value.toLocaleString("de-DE", {
     minimumFractionDigits: 4,
     maximumFractionDigits: 4,
   });
@@ -99,12 +105,12 @@ function formatFxTimestamp(value: string | null): string | null {
   if (Number.isNaN(date.getTime())) {
     return null;
   }
-  return date.toLocaleString('de-DE', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
+  return date.toLocaleString("de-DE", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -124,9 +130,9 @@ function formatFxSource(account: AccountOverviewRow): string {
     parts.push(`Kurs ${rateLabel}`);
   }
   if (parts.length === 0) {
-    return account.fx_unavailable ? 'FX-Daten fehlen' : '—';
+    return account.fx_unavailable ? "FX-Daten fehlen" : "—";
   }
-  return parts.join(' · ');
+  return parts.join(" · ");
 }
 
 function buildHeaderMeta(
@@ -134,13 +140,12 @@ function buildHeaderMeta(
   fxTotal: number,
   fxMissingCount: number,
 ): string {
-  const fxTotalLabel =
-    fxTotal > 0 ? formatEuroLabel(fxTotal) : '—';
+  const fxTotalLabel = fxTotal > 0 ? formatEuroLabel(fxTotal) : "—";
   const missingNote = fxMissingCount
     ? `<span class="total-wealth-note">${String(
         fxMissingCount,
       )}&nbsp;FX-Konten ohne Kurs</span>`
-    : '';
+    : "";
 
   return `
     <div class="header-meta-row accounts-meta">
@@ -153,9 +158,9 @@ function buildHeaderMeta(
 
 function buildFxWarningBanner(count: number): string {
   if (count === 0) {
-    return '';
+    return "";
   }
-  const plural = count === 1 ? '' : 'e';
+  const plural = count === 1 ? "" : "e";
   return `
     <div class="card warning-card" role="status" aria-live="polite">
       <h2>FX-Warnung</h2>
@@ -171,10 +176,14 @@ function buildAccountsTables(
   fxAccounts: AccountOverviewRow[],
 ): { eurTable: string; fxTable: string } {
   const eurRows = eurAccounts.map((account) => ({
-    name: renderNameWithBadges(account.name, visibleAccountBadges(account.badges), {
-      containerClass: 'account-name',
-      labelClass: 'account-name__label',
-    }),
+    name: renderNameWithBadges(
+      account.name,
+      visibleAccountBadges(account.badges),
+      {
+        containerClass: "account-name",
+        labelClass: "account-name__label",
+      },
+    ),
     balance: account.balance ?? null,
     fx_unavailable: account.fx_unavailable,
   }));
@@ -182,32 +191,36 @@ function buildAccountsTables(
   const eurTable = makeTable(
     eurRows,
     [
-      { key: 'name', label: 'Name' },
-      { key: 'balance', label: 'Kontostand (EUR)', align: 'right' as const },
+      { key: "name", label: "Name" },
+      { key: "balance", label: "Kontostand (EUR)", align: "right" as const },
     ],
-    ['balance'],
+    ["balance"],
   );
 
   const fxRows = fxAccounts.map((account) => ({
-    name: renderNameWithBadges(account.name, visibleAccountBadges(account.badges), {
-      containerClass: 'account-name',
-      labelClass: 'account-name__label',
-    }),
+    name: renderNameWithBadges(
+      account.name,
+      visibleAccountBadges(account.badges),
+      {
+        containerClass: "account-name",
+        labelClass: "account-name__label",
+      },
+    ),
     fx_display: formatOriginalBalance(account),
     fx_source: escapeHtml(formatFxSource(account)),
-    balance: account.fx_unavailable ? null : account.balance ?? null,
+    balance: account.fx_unavailable ? null : (account.balance ?? null),
     fx_unavailable: account.fx_unavailable,
   }));
 
   const fxTable = makeTable(
     fxRows,
     [
-      { key: 'name', label: 'Name' },
-      { key: 'fx_display', label: 'Betrag (FX)' },
-      { key: 'fx_source', label: 'FX-Provenienz' },
-      { key: 'balance', label: 'EUR', align: 'right' as const },
+      { key: "name", label: "Name" },
+      { key: "fx_display", label: "Betrag (FX)" },
+      { key: "fx_source", label: "FX-Provenienz" },
+      { key: "balance", label: "EUR", align: "right" as const },
     ],
-    ['balance'],
+    ["balance"],
   );
 
   return { eurTable, fxTable };
@@ -225,9 +238,7 @@ export async function renderAccountsTab(
   const { eur, fx } = partitionAccounts(rows);
 
   const eurTotal = sumBalances(eur);
-  const fxTotal = sumBalances(
-    fx.filter((account) => !account.fx_unavailable),
-  );
+  const fxTotal = sumBalances(fx.filter((account) => !account.fx_unavailable));
   const fxMissingCount = fx.filter(
     (account) => account.fx_unavailable || account.balance == null,
   ).length;
@@ -259,7 +270,7 @@ export async function renderAccountsTab(
           <span class="table-note__icon" aria-hidden="true">ℹ️</span>
           <span>FX-Provenienz zeigt Quelle, Zeitpunkt und Kurs des letzten Abgleichs.</span>
         </p>`
-          : ''
+          : ""
       }
     </div>
   `;

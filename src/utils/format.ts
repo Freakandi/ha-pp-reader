@@ -1,5 +1,7 @@
-
-export function formatCurrency(value: number | null | undefined, currency = "EUR"): string {
+export function formatCurrency(
+  value: number | null | undefined,
+  currency = "EUR",
+): string {
   if (value === null || typeof value === "undefined") return "";
   const formatter = new Intl.NumberFormat("de-DE", {
     style: "currency",

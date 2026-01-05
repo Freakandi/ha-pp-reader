@@ -3,7 +3,7 @@
  */
 
 import type { OverviewBadge } from "../store/selectors/portfolio";
-import { escapeHtml } from '../../utils/html';
+import { escapeHtml } from "../../utils/html";
 
 export interface BadgeListOptions {
   containerClass?: string;

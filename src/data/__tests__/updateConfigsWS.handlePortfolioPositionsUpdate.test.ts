@@ -1,15 +1,18 @@
-import assert from 'node:assert/strict';
-import test from 'node:test';
+import assert from "node:assert/strict";
+import test from "node:test";
 
-import { installDomEnvironment } from '../../__tests__/dom';
-import { __TEST_ONLY__ as storeTestHelpers } from '../../lib/store/portfolioStore';
+import { installDomEnvironment } from "../../__tests__/dom";
+import { __TEST_ONLY__ as storeTestHelpers } from "../../lib/store/portfolioStore";
 import {
   clearAllPortfolioPositions,
   hasPortfolioPositions,
   setPortfolioPositions,
   type PortfolioPositionRecord,
-} from '../positionsCache';
-import { handlePortfolioPositionsUpdate, __TEST_ONLY__ as wsTestHelpers } from '../updateConfigsWS';
+} from "../positionsCache";
+import {
+  handlePortfolioPositionsUpdate,
+  __TEST_ONLY__ as wsTestHelpers,
+} from "../updateConfigsWS";
 
 const POSITIONS_MARKUP = `
 <!doctype html>
@@ -32,7 +35,7 @@ const POSITIONS_MARKUP = `
 </html>
 `;
 
-void test('handlePortfolioPositionsUpdate preserves cached metrics when push payloads are slim', async () => {
+void test("handlePortfolioPositionsUpdate preserves cached metrics when push payloads are slim", async () => {
   storeTestHelpers.reset();
   clearAllPortfolioPositions();
   wsTestHelpers.clearPendingUpdates();
@@ -41,16 +44,16 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
   try {
     globalThis.CustomEvent = env.window.CustomEvent;
 
-    await import('../../tabs/overview');
+    await import("../../tabs/overview");
 
-    const root = env.document.getElementById('root');
+    const root = env.document.getElementById("root");
     assert.ok(root);
 
     const basePosition: PortfolioPositionRecord = {
-      portfolio_uuid: 'portfolio-1',
-      security_uuid: 'security-1',
-      name: 'Test Holding',
-      currency_code: 'EUR',
+      portfolio_uuid: "portfolio-1",
+      security_uuid: "security-1",
+      name: "Test Holding",
+      currency_code: "EUR",
       current_holdings: 5,
       purchase_value: 500,
       current_value: 750,
@@ -59,7 +62,7 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
         security: 100,
         account: 100,
         eur: 100,
-        source: 'aggregation',
+        source: "aggregation",
         coverage_ratio: 1,
       },
       performance: {
@@ -67,14 +70,14 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
         gain_pct: 50,
         total_change_eur: 250,
         total_change_pct: 50,
-        source: 'derived',
+        source: "derived",
         coverage_ratio: 1,
         day_change: {
           value_change_eur: 50,
           change_pct: 7.14,
           price_change_eur: 10,
           price_change_native: 10,
-          source: 'derived',
+          source: "derived",
           coverage_ratio: 1,
         },
       },
@@ -82,15 +85,15 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
       last_close_eur: 140,
     };
 
-    setPortfolioPositions('portfolio-1', [basePosition]);
+    setPortfolioPositions("portfolio-1", [basePosition]);
 
     handlePortfolioPositionsUpdate(
       {
-        portfolio_uuid: 'portfolio-1',
+        portfolio_uuid: "portfolio-1",
         positions: [
           {
-            security_uuid: 'security-1',
-            name: 'Test Holding',
+            security_uuid: "security-1",
+            name: "Test Holding",
             current_holdings: 5,
             purchase_value: 500,
             current_value: 800,
@@ -105,7 +108,7 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
     );
 
     const firstRow = root.querySelector<HTMLTableRowElement>(
-      '.positions-container tbody tr',
+      ".positions-container tbody tr",
     );
     assert.ok(firstRow);
 
@@ -114,8 +117,8 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
     const avgPriceText = avgPriceCell.textContent;
     assert.ok(avgPriceText);
     assert.ok(
-      avgPriceText.includes('100'),
-      'average price should be sourced from cached payload',
+      avgPriceText.includes("100"),
+      "average price should be sourced from cached payload",
     );
 
     // Day Change Combo is at Index 5
@@ -123,8 +126,11 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
     assert.ok(dayChangeCell);
     const dayChangeText = dayChangeCell.textContent;
     assert.ok(dayChangeText);
-    assert.ok(!dayChangeText.includes('—'), 'day change should remain populated');
-    assert.ok(dayChangeText.includes('€'));
+    assert.ok(
+      !dayChangeText.includes("—"),
+      "day change should remain populated",
+    );
+    assert.ok(dayChangeText.includes("€"));
 
     // Gain Combo is at Index 6
     const gainPctCell = firstRow.cells.item(6);
@@ -132,8 +138,8 @@ void test('handlePortfolioPositionsUpdate preserves cached metrics when push pay
     const gainPctText = gainPctCell.textContent;
     assert.ok(gainPctText);
     assert.ok(
-      gainPctText.includes('%'),
-      'gain percentage should remain available',
+      gainPctText.includes("%"),
+      "gain percentage should remain available",
     );
   } finally {
     env.restore();
@@ -164,7 +170,7 @@ const COLLAPSED_MARKUP = `
 </html>
 `;
 
-void test('collapsed portfolios skip partial push renders until expanded', () => {
+void test("collapsed portfolios skip partial push renders until expanded", () => {
   storeTestHelpers.reset();
   clearAllPortfolioPositions();
   wsTestHelpers.clearPendingUpdates();
@@ -173,16 +179,16 @@ void test('collapsed portfolios skip partial push renders until expanded', () =>
   globalThis.CustomEvent = env.window.CustomEvent;
 
   try {
-    const root = env.document.getElementById('root');
+    const root = env.document.getElementById("root");
     assert.ok(root);
 
     handlePortfolioPositionsUpdate(
       {
-        portfolio_uuid: 'portfolio-1',
+        portfolio_uuid: "portfolio-1",
         positions: [
           {
-            security_uuid: 'security-1',
-            name: 'Test Holding',
+            security_uuid: "security-1",
+            name: "Test Holding",
             current_holdings: 1,
             purchase_value: 100,
             current_value: 110,
@@ -194,7 +200,7 @@ void test('collapsed portfolios skip partial push renders until expanded', () =>
     );
 
     assert.strictEqual(wsTestHelpers.getPendingUpdateCount(), 0);
-    assert.strictEqual(hasPortfolioPositions('portfolio-1'), false);
+    assert.strictEqual(hasPortfolioPositions("portfolio-1"), false);
   } finally {
     env.restore();
     clearAllPortfolioPositions();

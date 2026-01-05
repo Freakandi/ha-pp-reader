@@ -1,8 +1,8 @@
-import test from 'node:test';
-import assert from 'node:assert/strict';
-import { JSDOM } from 'jsdom';
+import test from "node:test";
+import assert from "node:assert/strict";
+import { JSDOM } from "jsdom";
 
-import { renderLineChart } from '../charting';
+import { renderLineChart } from "../charting";
 
 type ChartState = {
   points?: Array<{ x: number; y: number }>;
@@ -12,10 +12,13 @@ type ChartState = {
   overlay?: SVGRectElement | null;
 };
 
-test('tooltip centers on data point when svg is CSS-scaled', () => {
-  const dom = new JSDOM('<!doctype html><body><div id="host"></div></body></html>', {
-    pretendToBeVisual: true,
-  });
+test("tooltip centers on data point when svg is CSS-scaled", () => {
+  const dom = new JSDOM(
+    '<!doctype html><body><div id="host"></div></body></html>',
+    {
+      pretendToBeVisual: true,
+    },
+  );
 
   const previousWindow = globalThis.window;
   const previousDocument = globalThis.document;
@@ -28,8 +31,8 @@ test('tooltip centers on data point when svg is CSS-scaled', () => {
   globalWithDom.document = dom.window.document as unknown as Document;
 
   try {
-    const host = dom.window.document.getElementById('host');
-    assert.ok(host, 'expected host element');
+    const host = dom.window.document.getElementById("host");
+    assert.ok(host, "expected host element");
 
     renderLineChart(host, {
       width: 640,
@@ -40,26 +43,33 @@ test('tooltip centers on data point when svg is CSS-scaled', () => {
       ],
     });
 
-    const container = host.querySelector<HTMLDivElement & { __chartState?: unknown }>(
-      '.line-chart-container',
+    const container = host.querySelector<
+      HTMLDivElement & { __chartState?: unknown }
+    >(".line-chart-container");
+    assert.ok(container, "expected chart container");
+    const state = (container as HTMLDivElement & { __chartState?: ChartState })
+      .__chartState;
+    assert.ok(state, "expected chart state");
+    assert.ok(
+      Array.isArray(state.points) && state.points.length > 0,
+      "expected chart points",
     );
-    assert.ok(container, 'expected chart container');
-    const state = (container as HTMLDivElement & { __chartState?: ChartState }).__chartState;
-    assert.ok(state, 'expected chart state');
-    assert.ok(Array.isArray(state.points) && state.points.length > 0, 'expected chart points');
-    assert.ok(Number.isFinite(state.width), 'expected numeric chart width');
-    assert.ok(Number.isFinite(state.height), 'expected numeric chart height');
+    assert.ok(Number.isFinite(state.width), "expected numeric chart width");
+    assert.ok(Number.isFinite(state.height), "expected numeric chart height");
     const width = Number(state.width);
     const height = Number(state.height);
-    const lastPoint = state.points[state.points.length - 1] as { x: number; y: number };
+    const lastPoint = state.points[state.points.length - 1] as {
+      x: number;
+      y: number;
+    };
 
-    const svg = container.querySelector<SVGSVGElement>('svg.line-chart-svg');
-    assert.ok(svg, 'expected svg element');
+    const svg = container.querySelector<SVGSVGElement>("svg.line-chart-svg");
+    assert.ok(svg, "expected svg element");
     const overlay = state.overlay as SVGRectElement | null;
-    assert.ok(overlay, 'expected overlay for pointer handling');
+    assert.ok(overlay, "expected overlay for pointer handling");
     const scaleX = 1.5;
     const scaleY = 1.2;
-    Object.defineProperty(svg, 'getBoundingClientRect', {
+    Object.defineProperty(svg, "getBoundingClientRect", {
       value: () => ({
         x: 0,
         y: 0,
@@ -76,7 +86,7 @@ test('tooltip centers on data point when svg is CSS-scaled', () => {
       configurable: true,
     });
 
-    const pointerMoveEvent = new jsdomWindow.PointerEvent('pointermove', {
+    const pointerMoveEvent = new jsdomWindow.PointerEvent("pointermove", {
       clientX: lastPoint.x * scaleX,
       clientY: lastPoint.y * scaleY,
       bubbles: true,
@@ -84,12 +94,15 @@ test('tooltip centers on data point when svg is CSS-scaled', () => {
     overlay.dispatchEvent(pointerMoveEvent);
 
     const tooltip: HTMLElement | null = state.tooltip ?? null;
-    assert.ok(tooltip, 'expected tooltip element');
+    assert.ok(tooltip, "expected tooltip element");
 
     const transform = tooltip.style.transform;
     const match = /translate\(([-\d.]+)px,\s*([-\d.]+)px\)/.exec(transform);
     const translateXRaw = match?.[1];
-    assert.ok(translateXRaw, 'tooltip transform should be set after pointer move');
+    assert.ok(
+      translateXRaw,
+      "tooltip transform should be set after pointer move",
+    );
     const translateX = Number.parseFloat(translateXRaw);
     const tooltipWidth = tooltip.offsetWidth || 0;
     const tooltipCenter = translateX + tooltipWidth / 2;
@@ -97,7 +110,7 @@ test('tooltip centers on data point when svg is CSS-scaled', () => {
     const expectedCenterX = lastPoint.x * scaleX;
     assert.ok(
       Number.isFinite(tooltipCenter),
-      'tooltip center should resolve to a finite number',
+      "tooltip center should resolve to a finite number",
     );
     assert.ok(
       Math.abs(tooltipCenter - expectedCenterX) < 1,

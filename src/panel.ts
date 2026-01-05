@@ -2,19 +2,19 @@
  * TypeScript entrypoint for the PP Reader panel custom element.
  * Mirrors the legacy panel.js behaviour during the migration.
  */
-import './dashboard';
-import type { DashboardElement } from './dashboard/registry';
+import "./dashboard";
+import type { DashboardElement } from "./dashboard/registry";
 import {
   registerDashboardElement,
   registerPanelHost,
   unregisterDashboardElement,
   unregisterPanelHost,
-} from './dashboard/registry';
+} from "./dashboard/registry";
 import type {
   HassPanel,
   HassRoute,
   HomeAssistant,
-} from './types/home-assistant';
+} from "./types/home-assistant";
 
 type PanelConfigLike = HassPanel | Record<string, unknown> | null | undefined;
 
@@ -26,18 +26,21 @@ interface DashboardHostElement extends DashboardElement {
 }
 
 const PANEL_URL = new URL(import.meta.url);
-const ASSET_BASE_URL = new URL('./', PANEL_URL);
-const ASSET_VERSION = PANEL_URL.searchParams.get('v');
-const BUNDLED_ASSET_ROOT = '/pp_reader_dashboard/';
+const ASSET_BASE_URL = new URL("./", PANEL_URL);
+const ASSET_VERSION = PANEL_URL.searchParams.get("v");
+const BUNDLED_ASSET_ROOT = "/pp_reader_dashboard/";
 
 const CSS_BASE_URL = (() => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     try {
       if (PANEL_URL.origin !== window.location.origin) {
         return new URL(BUNDLED_ASSET_ROOT, window.location.origin);
       }
     } catch (error) {
-      console.warn('[pp_reader] Konnte CSS-Basispfad nicht ableiten, verwende Panel-URL.', error);
+      console.warn(
+        "[pp_reader] Konnte CSS-Basispfad nicht ableiten, verwende Panel-URL.",
+        error,
+      );
     }
   }
   return ASSET_BASE_URL;
@@ -54,8 +57,8 @@ class PPReaderPanel extends HTMLElement {
 
   constructor() {
     super();
-    const shadow = this.attachShadow({ mode: 'open' });
-    const container = document.createElement('div');
+    const shadow = this.attachShadow({ mode: "open" });
+    const container = document.createElement("div");
     container.innerHTML = `
       <div class="panel-root">
         <header class="header">
@@ -71,44 +74,56 @@ class PPReaderPanel extends HTMLElement {
         </div>
       </div>
     `;
-    this._loadCss('css/base.css');
-    this._loadCss('css/cards.css');
-    this._loadCss('css/nav.css');
-    this._loadCss('css/date-range-picker.css');
+    this._loadCss("css/base.css");
+    this._loadCss("css/cards.css");
+    this._loadCss("css/nav.css");
+    this._loadCss("css/date-range-picker.css");
     shadow.appendChild(container);
 
-    this._upgradeProperty('hass');
-    this._upgradeProperty('panel');
-    this._upgradeProperty('route');
-    this._upgradeProperty('narrow');
+    this._upgradeProperty("hass");
+    this._upgradeProperty("panel");
+    this._upgradeProperty("route");
+    this._upgradeProperty("narrow");
 
     // NEU: Referenz auf das Dashboard-Element sichern
-    this._dashboardEl = container.querySelector<DashboardHostElement>('pp-reader-dashboard');
+    this._dashboardEl = container.querySelector<DashboardHostElement>(
+      "pp-reader-dashboard",
+    );
     if (!this._dashboardEl) {
-      console.error('[pp_reader] Dashboard Element nicht gefunden – Rendering unmöglich.');
+      console.error(
+        "[pp_reader] Dashboard Element nicht gefunden – Rendering unmöglich.",
+      );
     } else {
-      console.debug('[pp_reader] Dashboard Element referenziert.');
+      console.debug("[pp_reader] Dashboard Element referenziert.");
       try {
         registerDashboardElement(this._dashboardEl);
       } catch (error) {
-        console.warn('[pp_reader] Konnte Dashboard-Referenz nicht registrieren', error);
+        console.warn(
+          "[pp_reader] Konnte Dashboard-Referenz nicht registrieren",
+          error,
+        );
       }
     }
 
     try {
       registerPanelHost(this);
     } catch (error) {
-      console.warn('[pp_reader] Konnte Panel-Instanz nicht verfolgen', error);
+      console.warn("[pp_reader] Konnte Panel-Instanz nicht verfolgen", error);
     }
 
-    const menuButton = container.querySelector<HTMLButtonElement>('.menu-button');
-    menuButton?.addEventListener('click', () => {
+    const menuButton =
+      container.querySelector<HTMLButtonElement>(".menu-button");
+    menuButton?.addEventListener("click", () => {
       const haMain = document
-        .querySelector('home-assistant')
-        ?.shadowRoot
-        ?.querySelector('home-assistant-main');
+        .querySelector("home-assistant")
+        ?.shadowRoot?.querySelector("home-assistant-main");
       if (haMain) {
-        haMain.dispatchEvent(new CustomEvent('hass-toggle-menu', { bubbles: true, composed: true }));
+        haMain.dispatchEvent(
+          new CustomEvent("hass-toggle-menu", {
+            bubbles: true,
+            composed: true,
+          }),
+        );
       }
     });
 
@@ -120,16 +135,20 @@ class PPReaderPanel extends HTMLElement {
 
   // Funktion zum Laden von CSS-Dateien ins Shadow DOM
   private _loadCss(relativePath: string): void {
-    const link = document.createElement('link');
-    link.rel = 'stylesheet';
+    const link = document.createElement("link");
+    link.rel = "stylesheet";
     try {
       const url = new URL(relativePath, CSS_BASE_URL);
       if (ASSET_VERSION) {
-        url.searchParams.set('v', ASSET_VERSION);
+        url.searchParams.set("v", ASSET_VERSION);
       }
       link.href = url.href;
     } catch (error) {
-      console.error('[pp_reader] Fehler beim Auflösen des CSS-Pfades', relativePath, error);
+      console.error(
+        "[pp_reader] Fehler beim Auflösen des CSS-Pfades",
+        relativePath,
+        error,
+      );
       return;
     }
     this.shadowRoot?.appendChild(link);
@@ -137,12 +156,12 @@ class PPReaderPanel extends HTMLElement {
 
   // Dynamische Breitenanpassung
   private _updateWidth(): void {
-    const wrapper = this.shadowRoot?.querySelector<HTMLElement>('.wrapper');
+    const wrapper = this.shadowRoot?.querySelector<HTMLElement>(".wrapper");
     if (wrapper) {
       const panelWidth = this.getBoundingClientRect().width;
       if (Number.isFinite(panelWidth)) {
         const widthLabel = `${String(panelWidth)}px`;
-        wrapper.style.setProperty('--panel-width', widthLabel);
+        wrapper.style.setProperty("--panel-width", widthLabel);
       }
     }
   }
@@ -178,7 +197,7 @@ class PPReaderPanel extends HTMLElement {
     };
 
     this._updateScheduled = true;
-    if (typeof queueMicrotask === 'function') {
+    if (typeof queueMicrotask === "function") {
       queueMicrotask(runUpdate);
     } else {
       void Promise.resolve().then(runUpdate);
@@ -189,13 +208,18 @@ class PPReaderPanel extends HTMLElement {
     // Fallback: falls beim ersten Setter noch nicht gesetzt, jetzt versuchen
     if (!this._dashboardEl) {
       this._dashboardEl =
-        this.shadowRoot?.querySelector<DashboardHostElement>('pp-reader-dashboard') || null;
+        this.shadowRoot?.querySelector<DashboardHostElement>(
+          "pp-reader-dashboard",
+        ) || null;
       if (!this._dashboardEl) return; // nichts zu tun
     }
     if (this._panel !== undefined) this._dashboardEl.panel = this._panel;
-    if (this._route !== undefined) this._dashboardEl.route = this._route ?? undefined;
-    if (this._narrow !== undefined) this._dashboardEl.narrow = this._narrow ?? undefined;
-    if (this._hass !== undefined) this._dashboardEl.hass = this._hass ?? undefined;
+    if (this._route !== undefined)
+      this._dashboardEl.route = this._route ?? undefined;
+    if (this._narrow !== undefined)
+      this._dashboardEl.narrow = this._narrow ?? undefined;
+    if (this._hass !== undefined)
+      this._dashboardEl.hass = this._hass ?? undefined;
   }
 
   // Cleanup beim Entfernen des Elements
@@ -218,6 +242,6 @@ class PPReaderPanel extends HTMLElement {
 }
 
 // Custom Element registrieren
-if (!customElements.get('pp-reader-panel')) {
-  customElements.define('pp-reader-panel', PPReaderPanel);
+if (!customElements.get("pp-reader-panel")) {
+  customElements.define("pp-reader-panel", PPReaderPanel);
 }

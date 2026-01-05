@@ -10,16 +10,16 @@ import type {
   NormalizedPositionSnapshot,
   NormalizationDiagnostics,
   SnapshotDataState,
-} from './types';
+} from "./types";
 
 type UnknownRecord = Record<string, unknown>;
 
 function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === 'object' && value !== null;
+  return typeof value === "object" && value !== null;
 }
 
 function toStringValue(value: unknown): string | null {
-  return typeof value === 'string' ? value : null;
+  return typeof value === "string" ? value : null;
 }
 
 function toNullableString(value: unknown): string | null {
@@ -27,15 +27,15 @@ function toNullableString(value: unknown): string | null {
 }
 
 function toFiniteNumber(value: unknown): number | null {
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
   }
-  if (typeof value === 'string') {
+  if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed.length === 0) {
       return null;
     }
-    const normalized = Number(trimmed.replace(',', '.'));
+    const normalized = Number(trimmed.replace(",", "."));
     return Number.isFinite(normalized) ? normalized : null;
   }
   return null;
@@ -59,10 +59,12 @@ function deserializeDataState(value: unknown): SnapshotDataState | null {
 }
 
 function readBoolean(value: unknown): boolean | undefined {
-  return typeof value === 'boolean' ? value : undefined;
+  return typeof value === "boolean" ? value : undefined;
 }
 
-export function deserializeAccountSnapshot(value: unknown): NormalizedAccountSnapshot | null {
+export function deserializeAccountSnapshot(
+  value: unknown,
+): NormalizedAccountSnapshot | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -112,14 +114,16 @@ export function deserializeAccountSnapshot(value: unknown): NormalizedAccountSna
   }
 
   const fxUnavailable = readBoolean(value.fx_unavailable);
-  if (typeof fxUnavailable === 'boolean') {
+  if (typeof fxUnavailable === "boolean") {
     snapshot.fx_unavailable = fxUnavailable;
   }
 
   return snapshot;
 }
 
-export function deserializeAccountSnapshots(value: unknown): NormalizedAccountSnapshot[] {
+export function deserializeAccountSnapshots(
+  value: unknown,
+): NormalizedAccountSnapshot[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -133,7 +137,9 @@ export function deserializeAccountSnapshots(value: unknown): NormalizedAccountSn
   return snapshots;
 }
 
-export function deserializePositionSnapshot(value: unknown): NormalizedPositionSnapshot | null {
+export function deserializePositionSnapshot(
+  value: unknown,
+): NormalizedPositionSnapshot | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -144,14 +150,20 @@ export function deserializePositionSnapshot(value: unknown): NormalizedPositionS
   const purchaseValue =
     toFiniteNumber(value.purchase_value_eur) ??
     (isRecord(aggregationRaw)
-      ? toFiniteNumber(aggregationRaw.purchase_value_eur) ??
+      ? (toFiniteNumber(aggregationRaw.purchase_value_eur) ??
         toFiniteNumber(aggregationRaw.purchase_total_account) ??
-        toFiniteNumber(aggregationRaw.account_currency_total)
+        toFiniteNumber(aggregationRaw.account_currency_total))
       : null) ??
     toFiniteNumber(value.purchase_value);
   const currentValue = toFiniteNumber(value.current_value);
 
-  if (!securityUuid || !name || currentHoldings == null || purchaseValue == null || currentValue == null) {
+  if (
+    !securityUuid ||
+    !name ||
+    currentHoldings == null ||
+    purchaseValue == null ||
+    currentValue == null
+  ) {
     return null;
   }
 
@@ -203,7 +215,9 @@ export function deserializePositionSnapshot(value: unknown): NormalizedPositionS
   return snapshot;
 }
 
-export function deserializePositionSnapshots(value: unknown): NormalizedPositionSnapshot[] {
+export function deserializePositionSnapshots(
+  value: unknown,
+): NormalizedPositionSnapshot[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -217,7 +231,9 @@ export function deserializePositionSnapshots(value: unknown): NormalizedPosition
   return snapshots;
 }
 
-export function deserializePortfolioSnapshot(value: unknown): NormalizedPortfolioSnapshot | null {
+export function deserializePortfolioSnapshot(
+  value: unknown,
+): NormalizedPortfolioSnapshot | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -230,7 +246,10 @@ export function deserializePortfolioSnapshot(value: unknown): NormalizedPortfoli
   }
 
   const purchaseValueRaw = toFiniteNumber(
-    value.purchase_sum ?? value.purchase_value_eur ?? value.purchase_value ?? value.purchaseSum,
+    value.purchase_sum ??
+      value.purchase_value_eur ??
+      value.purchase_value ??
+      value.purchaseSum,
   );
   const purchaseValue = purchaseValueRaw ?? 0;
 
@@ -245,9 +264,11 @@ export function deserializePortfolioSnapshot(value: unknown): NormalizedPortfoli
       toFiniteNumber((value as { day_change_eur?: unknown }).day_change_eur) ??
       undefined,
     day_change_pct:
-      toFiniteNumber((value as { day_change_pct?: unknown }).day_change_pct) ?? undefined,
+      toFiniteNumber((value as { day_change_pct?: unknown }).day_change_pct) ??
+      undefined,
     position_count: toInteger(value.position_count ?? value.count) ?? undefined,
-    missing_value_positions: toInteger(value.missing_value_positions) ?? undefined,
+    missing_value_positions:
+      toInteger(value.missing_value_positions) ?? undefined,
     has_current_value: readBoolean(value.has_current_value),
     performance: cloneRecord(value.performance),
     coverage_ratio: toFiniteNumber(value.coverage_ratio) ?? undefined,
@@ -263,7 +284,9 @@ export function deserializePortfolioSnapshot(value: unknown): NormalizedPortfoli
   return snapshot;
 }
 
-export function deserializePortfolioSnapshots(value: unknown): NormalizedPortfolioSnapshot[] {
+export function deserializePortfolioSnapshots(
+  value: unknown,
+): NormalizedPortfolioSnapshot[] {
   if (!Array.isArray(value)) {
     return [];
   }
@@ -277,7 +300,9 @@ export function deserializePortfolioSnapshots(value: unknown): NormalizedPortfol
   return snapshots;
 }
 
-export function deserializeNormalizedPayloadMetadata(value: unknown): NormalizedPayloadMetadata | null {
+export function deserializeNormalizedPayloadMetadata(
+  value: unknown,
+): NormalizedPayloadMetadata | null {
   if (!isRecord(value)) {
     return null;
   }
@@ -300,7 +325,9 @@ export function deserializeNormalizedPayloadMetadata(value: unknown): Normalized
   } else {
     delete metadata.provenance;
   }
-  const generatedAt = toStringValue(value.generated_at ?? value.snapshot_generated_at);
+  const generatedAt = toStringValue(
+    value.generated_at ?? value.snapshot_generated_at,
+  );
   if (generatedAt) {
     metadata.generated_at = generatedAt;
   } else {
@@ -316,16 +343,20 @@ export function deserializeNormalizationDiagnostics(
     return null;
   }
   const diagnostics: NormalizationDiagnostics = { ...value };
-  const normalizedPayload = deserializeNormalizedPayloadMetadata(value.normalized_payload);
+  const normalizedPayload = deserializeNormalizedPayloadMetadata(
+    value.normalized_payload,
+  );
   if (normalizedPayload) {
     diagnostics.normalized_payload = normalizedPayload;
-  } else if ('normalized_payload' in diagnostics) {
+  } else if ("normalized_payload" in diagnostics) {
     delete diagnostics.normalized_payload;
   }
   return diagnostics;
 }
 
-export function deserializeNormalizedDashboardSnapshot(value: unknown): NormalizedDashboardSnapshot | null {
+export function deserializeNormalizedDashboardSnapshot(
+  value: unknown,
+): NormalizedDashboardSnapshot | null {
   if (!isRecord(value)) {
     return null;
   }

@@ -182,7 +182,6 @@ function renderTrend(value: number, formatted: string): string {
   return `<span class="${cls}">${formatted}</span>`;
 }
 
-
 type PortfolioQueryRoot = Document | HTMLElement;
 
 type PortfolioPositionsSortKey =

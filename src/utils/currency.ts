@@ -10,12 +10,12 @@ export interface RoundCurrencyOptions {
 }
 
 export function toFiniteCurrency(value: unknown): number | null {
-  if (typeof value === 'number') {
+  if (typeof value === "number") {
     return Number.isFinite(value) ? value : null;
   }
 
-  if (typeof value === 'string') {
-    const trimmed = value.trim().replace(/\u00a0/g, '');
+  if (typeof value === "string") {
+    const trimmed = value.trim().replace(/\u00a0/g, "");
     if (!trimmed) {
       return null;
     }
@@ -25,13 +25,13 @@ export function toFiniteCurrency(value: unknown): number | null {
       return direct;
     }
 
-    const stripped = trimmed.replace(/[^0-9.,+-]/g, '');
+    const stripped = trimmed.replace(/[^0-9.,+-]/g, "");
     if (!stripped) {
       return null;
     }
 
-    const lastComma = stripped.lastIndexOf(',');
-    const lastDot = stripped.lastIndexOf('.');
+    const lastComma = stripped.lastIndexOf(",");
+    const lastDot = stripped.lastIndexOf(".");
     let normalized = stripped;
 
     const hasComma = lastComma !== -1;
@@ -39,34 +39,37 @@ export function toFiniteCurrency(value: unknown): number | null {
 
     if (hasComma && (!hasDot || lastComma > lastDot)) {
       if (!hasDot) {
-        const commaGroups = normalized.split(',');
+        const commaGroups = normalized.split(",");
         const decimalDigits = commaGroups[commaGroups.length - 1]?.length ?? 0;
-        const integerPart = commaGroups.slice(0, -1).join('');
-        const integerDigits = integerPart.replace(/[+-]/g, '').length;
+        const integerPart = commaGroups.slice(0, -1).join("");
+        const integerDigits = integerPart.replace(/[+-]/g, "").length;
         const multipleCommas = commaGroups.length > 2;
         const integerIsZero = /^[-+]?0$/.test(integerPart);
 
         const treatAsThousands =
           multipleCommas ||
           decimalDigits === 0 ||
-          (decimalDigits === 3 && integerDigits > 0 && integerDigits <= 3 && !integerIsZero);
+          (decimalDigits === 3 &&
+            integerDigits > 0 &&
+            integerDigits <= 3 &&
+            !integerIsZero);
 
         normalized = treatAsThousands
-          ? normalized.replace(/,/g, '')
-          : normalized.replace(',', '.');
+          ? normalized.replace(/,/g, "")
+          : normalized.replace(",", ".");
       } else {
-        normalized = normalized.replace(/\./g, '').replace(',', '.');
+        normalized = normalized.replace(/\./g, "").replace(",", ".");
       }
     } else if (hasDot && hasComma && lastDot > lastComma) {
-      normalized = normalized.replace(/,/g, '');
+      normalized = normalized.replace(/,/g, "");
     } else if (hasDot) {
       const decimals = normalized.length - lastDot - 1;
-      if (decimals === 3 && /\d{4,}/.test(normalized.replace(/\./g, ''))) {
-        normalized = normalized.replace(/\./g, '');
+      if (decimals === 3 && /\d{4,}/.test(normalized.replace(/\./g, ""))) {
+        normalized = normalized.replace(/\./g, "");
       }
     }
 
-    if (normalized === '-' || normalized === '+') {
+    if (normalized === "-" || normalized === "+") {
       return null;
     }
 
@@ -75,7 +78,7 @@ export function toFiniteCurrency(value: unknown): number | null {
       return localized;
     }
 
-    const relaxed = Number.parseFloat(stripped.replace(',', '.'));
+    const relaxed = Number.parseFloat(stripped.replace(",", "."));
     if (Number.isFinite(relaxed)) {
       return relaxed;
     }

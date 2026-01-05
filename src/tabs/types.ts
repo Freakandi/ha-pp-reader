@@ -19,7 +19,9 @@ function isNullableNumber(value: unknown): value is number | null {
 }
 
 function isStringArray(value: unknown): value is string[] {
-  return Array.isArray(value) && value.every((entry) => typeof entry === "string");
+  return (
+    Array.isArray(value) && value.every((entry) => typeof entry === "string")
+  );
 }
 
 function isRecord(value: unknown): value is UnknownRecord {
@@ -180,9 +182,12 @@ export interface PortfolioPositionsUpdatedEventDetail {
   securityUuids: string[];
 }
 
-export type PortfolioPositionsUpdatedEvent = CustomEvent<PortfolioPositionsUpdatedEventDetail>;
+export type PortfolioPositionsUpdatedEvent =
+  CustomEvent<PortfolioPositionsUpdatedEventDetail>;
 
-export function isAverageCostPayload(value: unknown): value is AverageCostPayload {
+export function isAverageCostPayload(
+  value: unknown,
+): value is AverageCostPayload {
   if (!isRecord(value)) {
     return false;
   }
@@ -219,29 +224,40 @@ export function isPerformanceDayChangePayload(
   const record = value;
 
   const hasNative =
-    !("price_change_native" in record) || isNullableNumber(record.price_change_native);
+    !("price_change_native" in record) ||
+    isNullableNumber(record.price_change_native);
   const hasEur =
-    !("price_change_eur" in record) || isNullableNumber(record.price_change_eur);
-  const hasChange = !("change_pct" in record) || isNullableNumber(record.change_pct);
+    !("price_change_eur" in record) ||
+    isNullableNumber(record.price_change_eur);
+  const hasChange =
+    !("change_pct" in record) || isNullableNumber(record.change_pct);
   const hasValueChange =
-    !("value_change_eur" in record) || isNullableNumber(record.value_change_eur);
+    !("value_change_eur" in record) ||
+    isNullableNumber(record.value_change_eur);
 
   if (!hasNative || !hasEur || !hasChange || !hasValueChange) {
     return false;
   }
 
   const hasAnyMetric =
-    (("price_change_native" in record || "price_change_eur" in record || "change_pct" in record || "value_change_eur" in record) &&
-      (record.price_change_native != null ||
-        record.price_change_eur != null ||
-        record.change_pct != null ||
-        record.value_change_eur != null));
+    ("price_change_native" in record ||
+      "price_change_eur" in record ||
+      "change_pct" in record ||
+      "value_change_eur" in record) &&
+    (record.price_change_native != null ||
+      record.price_change_eur != null ||
+      record.change_pct != null ||
+      record.value_change_eur != null);
 
   if (!hasAnyMetric) {
     return false;
   }
 
-  if ("source" in record && record.source !== undefined && typeof record.source !== "string") {
+  if (
+    "source" in record &&
+    record.source !== undefined &&
+    typeof record.source !== "string"
+  ) {
     return false;
   }
 
@@ -252,7 +268,9 @@ export function isPerformanceDayChangePayload(
   return true;
 }
 
-export function isPerformanceMetricsPayload(value: unknown): value is PerformanceMetricsPayload {
+export function isPerformanceMetricsPayload(
+  value: unknown,
+): value is PerformanceMetricsPayload {
   if (!isRecord(value)) {
     return false;
   }
@@ -273,7 +291,11 @@ export function isPerformanceMetricsPayload(value: unknown): value is Performanc
     return false;
   }
 
-  if ("day_change" in record && record.day_change !== undefined && record.day_change !== null) {
+  if (
+    "day_change" in record &&
+    record.day_change !== undefined &&
+    record.day_change !== null
+  ) {
     if (!isPerformanceDayChangePayload(record.day_change)) {
       return false;
     }
@@ -282,7 +304,9 @@ export function isPerformanceMetricsPayload(value: unknown): value is Performanc
   return true;
 }
 
-export function isHoldingsAggregationPayload(value: unknown): value is HoldingsAggregationPayload {
+export function isHoldingsAggregationPayload(
+  value: unknown,
+): value is HoldingsAggregationPayload {
   if (!isRecord(value)) {
     return false;
   }

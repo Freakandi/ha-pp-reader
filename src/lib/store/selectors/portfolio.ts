@@ -111,7 +111,9 @@ function titleCase(value: string): string {
     .join(" ");
 }
 
-function composeProvenanceBadge(provenance: string | null): OverviewBadge | null {
+function composeProvenanceBadge(
+  provenance: string | null,
+): OverviewBadge | null {
   const normalized = normalizeProvenanceLabel(provenance);
   if (!normalized) {
     return null;
@@ -180,9 +182,7 @@ function extractCurrencyCodes(payload: unknown): string[] {
   };
 
   const fromArray = (values: unknown[]): string[] =>
-    values
-      .map(normalizeCode)
-      .filter((code): code is string => Boolean(code));
+    values.map(normalizeCode).filter((code): code is string => Boolean(code));
 
   if (Array.isArray(payload)) {
     return fromArray(payload);
@@ -206,7 +206,8 @@ function buildAccountRow(
   }
 
   const uuid =
-    toNonEmptyString(snapshot.uuid) ?? `${FALLBACK_ACCOUNT_ID}-${snapshot.name ?? "0"}`;
+    toNonEmptyString(snapshot.uuid) ??
+    `${FALLBACK_ACCOUNT_ID}-${snapshot.name ?? "0"}`;
   const name = sanitizeLabel(snapshot.name, "Unbenanntes Konto");
   const currencyCode = toNonEmptyString(snapshot.currency_code);
   const balance = toFiniteNumber(snapshot.balance);
@@ -217,7 +218,9 @@ function buildAccountRow(
       ? clampRatio(toFiniteNumber(snapshot.coverage_ratio))
       : null;
   const provenance = toNonEmptyString(snapshot.provenance);
-  const metricRunUuid: string | null = toNonEmptyString(snapshot.metric_run_uuid);
+  const metricRunUuid: string | null = toNonEmptyString(
+    snapshot.metric_run_uuid,
+  );
   const fxUnavailable = snapshot.fx_unavailable === true;
   const fxRate = toFiniteNumber(snapshot.fx_rate);
   const fxRateSource = toNonEmptyString(snapshot.fx_rate_source);
@@ -269,13 +272,17 @@ function buildPortfolioRow(
   const currentValue = toFiniteNumber(snapshot.current_value);
   const purchaseSum =
     toFiniteNumber(snapshot.purchase_sum) ??
-    toFiniteNumber((snapshot as { purchase_value_eur?: unknown }).purchase_value_eur) ??
+    toFiniteNumber(
+      (snapshot as { purchase_value_eur?: unknown }).purchase_value_eur,
+    ) ??
     toFiniteNumber(snapshot.purchase_value) ??
     0;
   const dayChangeAbs =
-    toFiniteNumber((snapshot as { day_change_abs?: unknown }).day_change_abs) ?? null;
+    toFiniteNumber((snapshot as { day_change_abs?: unknown }).day_change_abs) ??
+    null;
   const dayChangePct =
-    toFiniteNumber((snapshot as { day_change_pct?: unknown }).day_change_pct) ?? null;
+    toFiniteNumber((snapshot as { day_change_pct?: unknown }).day_change_pct) ??
+    null;
 
   const performance = normalizePerformancePayload(snapshot.performance);
   const gainAbs = performance?.gain_abs ?? null;
@@ -292,14 +299,22 @@ function buildPortfolioRow(
       ? toFiniteNumber(performanceDayChange.change_pct)
       : null);
 
-  if (resolvedDayChangeAbs == null && resolvedDayChangePct != null && currentValue != null) {
+  if (
+    resolvedDayChangeAbs == null &&
+    resolvedDayChangePct != null &&
+    currentValue != null
+  ) {
     const baseline = currentValue / (1 + resolvedDayChangePct / 100);
     if (baseline) {
       resolvedDayChangeAbs = currentValue - baseline;
     }
   }
 
-  if (resolvedDayChangePct == null && resolvedDayChangeAbs != null && currentValue != null) {
+  if (
+    resolvedDayChangePct == null &&
+    resolvedDayChangeAbs != null &&
+    currentValue != null
+  ) {
     const baseline = currentValue - resolvedDayChangeAbs;
     if (baseline) {
       resolvedDayChangePct = (resolvedDayChangeAbs / baseline) * 100;

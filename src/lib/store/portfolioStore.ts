@@ -39,7 +39,9 @@ function toNullableString(value: unknown): string | null | undefined {
 }
 
 function toFiniteNumber(value: unknown): number | undefined {
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  return typeof value === "number" && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 function toNullableNumber(value: unknown): number | null | undefined {
@@ -56,14 +58,18 @@ function toFiniteInteger(value: unknown): number | undefined {
   return Math.trunc(value);
 }
 
-function cloneRecord<T extends Record<string, unknown>>(value: T | null | undefined): T | undefined {
+function cloneRecord<T extends Record<string, unknown>>(
+  value: T | null | undefined,
+): T | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
   }
   return { ...value };
 }
 
-function clonePositionSnapshot(snapshot: NormalizedPositionSnapshot): NormalizedPositionSnapshot {
+function clonePositionSnapshot(
+  snapshot: NormalizedPositionSnapshot,
+): NormalizedPositionSnapshot {
   const clone: NormalizedPositionSnapshot = { ...snapshot };
   clone.average_cost = cloneRecord(snapshot.average_cost);
   clone.performance = cloneRecord(snapshot.performance);
@@ -72,7 +78,9 @@ function clonePositionSnapshot(snapshot: NormalizedPositionSnapshot): Normalized
   return clone;
 }
 
-function clonePortfolioSnapshot(snapshot: PortfolioSnapshotWithId): PortfolioSnapshotWithId {
+function clonePortfolioSnapshot(
+  snapshot: PortfolioSnapshotWithId,
+): PortfolioSnapshotWithId {
   const clone: PortfolioSnapshotWithId = { ...snapshot };
   clone.performance = cloneRecord(snapshot.performance);
   clone.data_state = cloneRecord(snapshot.data_state);
@@ -108,18 +116,24 @@ function normalizePortfolioSnapshot(
 
   const purchaseValue =
     toNullableNumber(candidate.purchase_sum) ??
-    toNullableNumber((candidate as { purchase_value_eur?: unknown }).purchase_value_eur) ??
+    toNullableNumber(
+      (candidate as { purchase_value_eur?: unknown }).purchase_value_eur,
+    ) ??
     toNullableNumber(candidate.purchase_value);
   if (purchaseValue !== undefined) {
     normalized.purchase_value = purchaseValue;
     normalized.purchase_sum = purchaseValue;
   }
 
-  const dayChangeAbs = toNullableNumber((candidate as { day_change_abs?: unknown }).day_change_abs);
+  const dayChangeAbs = toNullableNumber(
+    (candidate as { day_change_abs?: unknown }).day_change_abs,
+  );
   if (dayChangeAbs !== undefined) {
     normalized.day_change_abs = dayChangeAbs;
   }
-  const dayChangePct = toNullableNumber((candidate as { day_change_pct?: unknown }).day_change_pct);
+  const dayChangePct = toNullableNumber(
+    (candidate as { day_change_pct?: unknown }).day_change_pct,
+  );
   if (dayChangePct !== undefined) {
     normalized.day_change_pct = dayChangePct;
   }
@@ -261,17 +275,17 @@ export function setPortfolioPositionsSnapshot(
     const mergedTarget = merged as Record<string, unknown>;
 
     const shallowKeys: (keyof NormalizedPositionSnapshot)[] = [
-      'portfolio_uuid',
-      'security_uuid',
-      'name',
-      'ticker_symbol',
-      'currency_code',
-      'current_holdings',
-      'purchase_value',
-      'current_value',
-      'coverage_ratio',
-      'provenance',
-      'metric_run_uuid',
+      "portfolio_uuid",
+      "security_uuid",
+      "name",
+      "ticker_symbol",
+      "currency_code",
+      "current_holdings",
+      "purchase_value",
+      "current_value",
+      "coverage_ratio",
+      "provenance",
+      "metric_run_uuid",
     ];
 
     shallowKeys.forEach((key) => {
@@ -287,11 +301,11 @@ export function setPortfolioPositionsSnapshot(
     ) => {
       const value = patch[field] as Record<string, unknown> | null | undefined;
       const baseValue =
-        base && base[field] && typeof base[field] === 'object'
+        base && base[field] && typeof base[field] === "object"
           ? (base[field] as Record<string, unknown>)
           : undefined;
 
-      if (!value || typeof value !== 'object') {
+      if (!value || typeof value !== "object") {
         if (value !== undefined) {
           mergedTarget[field] = value;
         }
@@ -313,15 +327,17 @@ export function setPortfolioPositionsSnapshot(
       mergedTarget[field] = mergedValue;
     };
 
-    mergeObjectField('performance', ['gain_pct', 'total_change_pct']);
-    mergeObjectField('aggregation');
-    mergeObjectField('average_cost');
-    mergeObjectField('data_state');
+    mergeObjectField("performance", ["gain_pct", "total_change_pct"]);
+    mergeObjectField("aggregation");
+    mergeObjectField("average_cost");
+    mergeObjectField("data_state");
 
     return merged;
   };
 
-  const existingPositions = Array.isArray(entry.positions) ? entry.positions : [];
+  const existingPositions = Array.isArray(entry.positions)
+    ? entry.positions
+    : [];
   const existingBySecurity = new Map(
     existingPositions
       .filter((pos) => pos.security_uuid)
@@ -329,9 +345,13 @@ export function setPortfolioPositionsSnapshot(
   );
 
   const mergedPositions = positions
-    .filter((candidate): candidate is NormalizedPositionSnapshot => Boolean(candidate))
+    .filter((candidate): candidate is NormalizedPositionSnapshot =>
+      Boolean(candidate),
+    )
     .map((patch) => {
-      const base = patch.security_uuid ? existingBySecurity.get(patch.security_uuid) : undefined;
+      const base = patch.security_uuid
+        ? existingBySecurity.get(patch.security_uuid)
+        : undefined;
       return mergePosition(base, patch);
     })
     .map(clonePositionSnapshot);
@@ -344,7 +364,9 @@ export function setPortfolioPositionsSnapshot(
 }
 
 export function getPortfolioSnapshots(): NormalizedPortfolioSnapshot[] {
-  return Array.from(portfolioState.values(), (snapshot) => clonePortfolioSnapshot(snapshot));
+  return Array.from(portfolioState.values(), (snapshot) =>
+    clonePortfolioSnapshot(snapshot),
+  );
 }
 
 export function getPortfolioSnapshot(
