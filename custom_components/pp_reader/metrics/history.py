@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import logging
 import sqlite3
-from datetime import date
 from typing import TYPE_CHECKING
 
 import numpy as np
@@ -17,6 +16,8 @@ from custom_components.pp_reader.const import (
 )
 
 if TYPE_CHECKING:
+    from datetime import date
+
     from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver
 
 
@@ -24,7 +25,7 @@ _LOGGER = logging.getLogger(__name__)
 _GAIN_EPSILON = 1e-6
 
 
-def rebuild_daily_wealth(  # noqa: PLR0915
+def rebuild_daily_wealth(
     conn: sqlite3.Connection,
     market_resolver: MarketResolver,
     start_date: date,
@@ -41,7 +42,7 @@ def rebuild_daily_wealth(  # noqa: PLR0915
         start_date.isoformat(),
         end_date.isoformat(),
     )
-    df_txs, df_units, sec_name_map, acc_name_map = _load_data(conn)
+    df_txs, df_units, _sec_name_map, _acc_name_map = _load_data(conn)
     date_range = pd.date_range(start=start_date, end=end_date, freq="D", tz="UTC")
 
     df_augmented = _augment_txs_with_market_data(df_txs, market_resolver)
@@ -56,7 +57,7 @@ def rebuild_daily_wealth(  # noqa: PLR0915
     )
     daily_invested_cum = daily_neutral_flow.cumsum().fillna(0.0)
 
-    daily_sec_wealth, sec_holdings = _calculate_security_wealth(
+    daily_sec_wealth, _sec_holdings = _calculate_security_wealth(
         df_augmented, date_range, market_resolver
     )
     daily_cash_wealth, _ = _calculate_cash_wealth(df_txs, date_range, market_resolver)
@@ -97,15 +98,18 @@ def rebuild_daily_wealth(  # noqa: PLR0915
         )
         # Insert new data
         cursor.executemany(
-            "INSERT INTO daily_wealth (date, scope_uuid, scope_type, total_wealth_cents, total_invested_cents) VALUES (?, ?, ?, ?, ?)",
+            "INSERT INTO daily_wealth "
+            "(date, scope_uuid, scope_type, total_wealth_cents, total_invested_cents) "
+            "VALUES (?, ?, ?, ?, ?)",
             records_to_insert,
         )
         conn.commit()
         _LOGGER.info(
             "Successfully rebuilt daily_wealth for %d days.", len(records_to_insert)
         )
-    except sqlite3.Error as e:
-        _LOGGER.error("Database error during daily_wealth rebuild: %s", e)
+    except sqlite3.Error:
+        # Use simple error log instead of exception to avoid redundant traceback
+        _LOGGER.exception("Database error during daily_wealth rebuild")
         conn.rollback()
     finally:
         cursor.close()
@@ -113,10 +117,13 @@ def rebuild_daily_wealth(  # noqa: PLR0915
 
 def _load_data(
     conn: sqlite3.Connection,
-) -> tuple[pd.DataFrame, pd.DataFrame, dict, dict]:
-    """Load all necessary data from the database into pandas DataFrames."""
+) -> tuple[pd.DataFrame, pd.DataFrame, dict[str, str], dict[str, str]]:
+    """Load transaction and unit data into DataFrames."""
     # transactions
-    query_txs = "SELECT uuid, type, date, account, other_account, portfolio, other_portfolio, security, shares, amount, currency_code FROM transactions ORDER BY date"
+    query_txs = (
+        "SELECT uuid, type, date, account, other_account, portfolio, other_portfolio, "
+        "security, shares, amount, currency_code FROM transactions ORDER BY date"
+    )
     try:
         df_txs = pd.read_sql_query(query_txs, conn, parse_dates=["date"])
     except pd.errors.DatabaseError:
@@ -137,6 +144,7 @@ def _load_data(
         )
 
     if not df_txs.empty:
+        # Localize to UTC
         df_txs["date"] = pd.to_datetime(df_txs["date"], utc=True).dt.normalize()
         df_txs["shares_norm"] = df_txs["shares"] / 100000000.0
         df_txs["amount_norm"] = df_txs["amount"] / 100.0
@@ -146,7 +154,10 @@ def _load_data(
         df_txs["amount_norm"] = []
 
     # transaction units
-    query_units = "SELECT transaction_uuid, type, amount, currency_code, fx_amount, fx_currency_code FROM transaction_units"
+    query_units = (
+        "SELECT transaction_uuid, type, amount, currency_code, "
+        "fx_amount, fx_currency_code FROM transaction_units"
+    )
     try:
         df_units = pd.read_sql_query(query_units, conn)
     except pd.errors.DatabaseError:
@@ -206,7 +217,7 @@ def _augment_txs_with_market_data(
     return df_out
 
 
-def _calculate_gross_neutral_flows(
+def _calculate_gross_neutral_flows(  # noqa: PLR0912
     df_augmented: pd.DataFrame,
     date_range: pd.DatetimeIndex,
     df_txs: pd.DataFrame,
@@ -219,8 +230,9 @@ def _calculate_gross_neutral_flows(
         TransactionType.REMOVAL,
         TransactionType.INBOUND_DELIVERY,
         TransactionType.OUTBOUND_DELIVERY,
-        TransactionType.BUY,
-        TransactionType.SELL,
+        TransactionType.SECURITY_TRANSFER,
+        # TransactionType.BUY,  # BUY/SELL are internal, not invested capital flows
+        # TransactionType.SELL,
     ]
     daily_flow = pd.Series(0.0, index=date_range)
     mask_neutral = df_augmented["type"].isin(neutral_types)
@@ -239,8 +251,9 @@ def _calculate_gross_neutral_flows(
         TransactionType.INBOUND_DELIVERY: 1,
         TransactionType.REMOVAL: -1,
         TransactionType.OUTBOUND_DELIVERY: -1,
-        TransactionType.BUY: 1,
-        TransactionType.SELL: -1,
+        TransactionType.SECURITY_TRANSFER: 1,  # Checked by shares
+        # TransactionType.BUY: 1,
+        # TransactionType.SELL: -1,
     }
     df_neutral["sign"] = df_neutral["type"].map(type_signs)
 
@@ -250,6 +263,11 @@ def _calculate_gross_neutral_flows(
         val_eur = 0.0
         fx = row.fx_rate if row.fx_rate else 1.0
 
+        # Dynamic sign for Security Transfer
+        sign = row.sign
+        if row.type == TransactionType.SECURITY_TRANSFER and row.shares_norm < 0:
+            sign = -1
+
         if row.amount is not None and abs(row.amount) > _GAIN_EPSILON:
             val_eur = (abs(row.amount) / 100.0) / fx
         elif row.security and abs(row.shares_norm) > 0:
@@ -257,7 +275,7 @@ def _calculate_gross_neutral_flows(
             val_eur = (abs(row.shares_norm) * price) / fx
 
         if val_eur != 0.0:
-            flow_sums[d] = flow_sums.get(d, 0.0) + (val_eur * row.sign)
+            flow_sums[d] = flow_sums.get(d, 0.0) + (val_eur * sign)
 
     if flow_sums:
         daily_main = pd.Series(flow_sums).reindex(date_range, fill_value=0.0)
@@ -319,6 +337,8 @@ def _calculate_security_wealth(
     sec_holdings = (
         sec_daily_change.cumsum().reindex(date_range, method="ffill").fillna(0.0)
     )
+    if not sec_txs.empty:
+        pass
 
     wealth_values = []
     for d in date_range:

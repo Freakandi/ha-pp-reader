@@ -2,8 +2,8 @@ import datetime
 import sqlite3
 
 import pytest
-
 from custom_components.pp_reader.backdating.engine_pandas import TransactionType
+
 from custom_components.pp_reader.metrics.calculator import PerformanceEngine
 
 

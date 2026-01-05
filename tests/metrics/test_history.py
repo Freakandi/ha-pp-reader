@@ -1,11 +1,11 @@
 """Tests for the daily_wealth history rebuilding module."""
+
 from __future__ import annotations
 
 import sqlite3
 from datetime import date
 from unittest.mock import MagicMock
 
-import pandas as pd
 import pytest
 
 from custom_components.pp_reader.metrics.history import rebuild_daily_wealth
@@ -36,7 +36,9 @@ def mock_conn():
     conn.execute(
         "CREATE TABLE securities (uuid TEXT PRIMARY KEY, name TEXT, currency_code TEXT);"
     )
-    conn.execute("CREATE TABLE accounts (uuid TEXT PRIMARY KEY, name TEXT, currency_code TEXT);")
+    conn.execute(
+        "CREATE TABLE accounts (uuid TEXT PRIMARY KEY, name TEXT, currency_code TEXT);"
+    )
     conn.execute(
         """
         CREATE TABLE daily_wealth (
@@ -55,7 +57,9 @@ def mock_market_resolver():
     """Fixture for a mock MarketResolver."""
     resolver = MagicMock()
     resolver.get_price.return_value = 100.0  # 100 EUR
-    resolver.get_fx.side_effect = lambda cur, _: 1.0 if cur == "EUR" else 0.85  # 1 USD = 0.85 EUR
+    resolver.get_fx.side_effect = (
+        lambda cur, _: 1.0 if cur == "EUR" else 0.85
+    )  # 1 USD = 0.85 EUR
     resolver.get_security_currency.return_value = "USD"
     return resolver
 
@@ -66,10 +70,10 @@ def test_rebuild_daily_wealth_simple_case(mock_conn, mock_market_resolver):
     start_date = date(2023, 1, 1)
     end_date = date(2023, 1, 3)
 
-    # Insert a single BUY transaction
+    # Insert a single INBOUND_DELIVERY transaction (Type 2) to represent initial capital
     mock_conn.execute(
         "INSERT INTO transactions (uuid, type, date, security, shares, amount, currency_code) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("tx1", 0, "2023-01-01T12:00:00Z", "sec1", 10 * 10**8, 1000 * 100, "USD"),
+        ("tx1", 2, "2023-01-01T12:00:00Z", "sec1", 10 * 10**8, 1000 * 100, "USD"),
     )
     mock_conn.execute(
         "INSERT INTO securities (uuid, name, currency_code) VALUES (?, ?, ?)",
@@ -82,7 +86,9 @@ def test_rebuild_daily_wealth_simple_case(mock_conn, mock_market_resolver):
 
     # Assert
     cursor = mock_conn.cursor()
-    cursor.execute("SELECT date, total_wealth_cents, total_invested_cents FROM daily_wealth ORDER BY date")
+    cursor.execute(
+        "SELECT date, total_wealth_cents, total_invested_cents FROM daily_wealth ORDER BY date"
+    )
     results = cursor.fetchall()
 
     assert len(results) == 3

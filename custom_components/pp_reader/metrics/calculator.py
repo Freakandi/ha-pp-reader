@@ -13,18 +13,11 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from custom_components.pp_reader.data import db_access
 from custom_components.pp_reader.const import (
-    SHARE_EPSILON,
     TransactionType,
-    UnitType,
 )
 from custom_components.pp_reader.data import db_access
 from custom_components.pp_reader.data.db_access import Transaction
-from custom_components.pp_reader.metrics.breakdown import (
-    BreakdownItem,
-    PerformanceBreakdown,
-)
 
 if TYPE_CHECKING:
     from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver
@@ -40,24 +33,7 @@ _ZERO_AMOUNT_EPSILON = 0.0001
 
 
 # Constants from TransactionType in engine_pandas.py
-class TransactionType:
-    """Enumeration of transaction types."""
-
-    BUY = 0
-    SELL = 1
-    INBOUND_DELIVERY = 2
-    OUTBOUND_DELIVERY = 3
-    SECURITY_TRANSFER = 4
-    CASH_TRANSFER = 5
-    DEPOSIT = 6
-    REMOVAL = 7
-    DIVIDEND = 8
-    INTEREST = 9
-    INTEREST_CHARGE = 10
-    TAX = 11
-    TAX_REFUND = 12
-    FEE = 13
-    FEE_REFUND = 14
+# TransactionType enum is now imported from const.py
 
 
 # Constants from Transaction Unit Types in engine_pandas.py
@@ -87,6 +63,29 @@ class PerformanceMetrics:
     fx_gains_cash: float = 0.0
     twr: float = 0.0
     irr: float = 0.0
+
+
+@dataclass
+class BreakdownItem:
+    """A single item in the performance breakdown."""
+
+    label: str
+    amount: float
+    details: dict | None = None
+
+
+@dataclass
+class PerformanceBreakdown:
+    """Detailed breakdown of performance components."""
+
+    realized_gains: list[BreakdownItem]
+    unrealized_gains: list[BreakdownItem]
+    dividends: list[BreakdownItem]
+    fees: list[BreakdownItem]
+    taxes: list[BreakdownItem]
+    interest: list[BreakdownItem]
+    fx_gains: list[BreakdownItem] = dataclasses.field(default_factory=list)
+    total: float = 0.0
 
 
 class PerformanceEngine:
@@ -580,7 +579,35 @@ class PerformanceEngine:
         metrics = PerformanceMetrics()
 
         start_prev = start_date - pd.Timedelta(days=1)
-        daily_wealth = self.get_daily_wealth(start_prev, end_date)
+        # Load from daily_wealth table
+        query = (
+            "SELECT date, total_wealth_cents, total_invested_cents "
+            "FROM daily_wealth WHERE date BETWEEN ? AND ?"
+        )
+        try:
+            daily_wealth = pd.read_sql_query(
+                query,
+                self.conn,
+                params=(start_prev.isoformat(), end_date.isoformat()),
+                parse_dates=["date"],
+            )
+            # Ensure UTC timezone for date column to match comparisons later
+            if not daily_wealth.empty:
+                daily_wealth["date"] = (
+                    pd.to_datetime(daily_wealth["date"])
+                    .dt.tz_localize(None)
+                    .dt.tz_localize(UTC)
+                )
+                daily_wealth["total_wealth_eur"] = (
+                    daily_wealth["total_wealth_cents"] / 100.0
+                )
+                daily_wealth["invested_capital_eur"] = (
+                    daily_wealth["total_invested_cents"] / 100.0
+                )
+        except pd.errors.DatabaseError:
+            daily_wealth = pd.DataFrame(
+                columns=["date", "total_wealth_eur", "invested_capital_eur"]
+            )
 
         # Use Scalar Valuation for Start/End Wealth (Single Source of Truth)
         # Start Wealth: State at Start of start_date (EOD T-1)
@@ -648,71 +675,6 @@ class PerformanceEngine:
             end_date,
             basis_ts=basis_ts,
         )
-
-        # Verification: Summation Consistency Check
-        # Re-derive components from daily_wealth for the window
-        dw_win = daily_wealth[
-            (daily_wealth["date"] >= start_date.isoformat())
-            & (daily_wealth["date"] <= end_date.isoformat())
-        ]
-        sum_div = dw_win["dividends_eur"].sum()
-        sum_int = dw_win["interest_eur"].sum()
-        sum_fee = dw_win["fees_eur"].sum()
-        sum_tax = dw_win["taxes_eur"].sum()
-        sum_neu = dw_win["performance_neutral_movements"].sum()
-
-        derived_abs = (
-            metrics.realized_gains
-            + metrics.unrealized_gains
-            + metrics.fx_gains_cash
-            + sum_div
-            + sum_int
-            - sum_fee
-            - sum_tax
-        )
-
-        diff = abs(metrics.absolute_performance - derived_abs)
-        if diff > _BREAKDOWN_THRESHOLD or _LOGGER.isEnabledFor(logging.DEBUG):
-            log_level = (
-                logging.WARNING if diff > _BREAKDOWN_THRESHOLD else logging.DEBUG
-            )
-            _LOGGER.log(
-                log_level,
-                "Performance Summation: %s to %s\n"
-                "  > Wealth: Start=%.2f, End=%.2f, Delta=%.2f\n"
-                "  > Invested: Start=%.2f, End=%.2f, Delta=%.2f\n"
-                "  > AbsPerf (WealthDelta - InvDelta) = %.2f\n"
-                "  > Derived (Sum of Components)    = %.2f\n"
-                "  > Difference                     = %.2f\n"
-                "  > Components:\n"
-                "      Realized   = %.2f\n"
-                "      Unrealized = %.2f\n"
-                "      FX Cash    = %.2f\n"
-                "      Dividends  = %.2f\n"
-                "      Interest   = %.2f\n"
-                "      Fees       = %.2f\n"
-                "      Taxes      = %.2f\n"
-                "      Neutral    = %.2f",
-                start_date,
-                end_date,
-                start_wealth,
-                end_wealth,
-                end_wealth - start_wealth,
-                start_invested,
-                end_invested,
-                end_invested - start_invested,
-                metrics.absolute_performance,
-                derived_abs,
-                diff,
-                metrics.realized_gains,
-                metrics.unrealized_gains,
-                metrics.fx_gains_cash,
-                sum_div,
-                sum_int,
-                sum_fee,
-                sum_tax,
-                sum_neu,
-            )
 
         # 4. Filter Cash Flows (TWR/IRR)
         # We need external flows: Deposits, Removals (including fees/taxes on them?)
