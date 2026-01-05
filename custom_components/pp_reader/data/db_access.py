@@ -1,19 +1,14 @@
-"""
-Provide database access functions and data models.
+"""Provide database access functions and data models."""
 
-Handle transactions, securities, accounts, portfolios,
-and related data in a SQLite database.
-"""
+from __future__ import annotations
 
 import json
 import logging
 import sqlite3
-from collections.abc import Iterator, Sequence
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from custom_components.pp_reader.currencies.persistence import (
     FxRateRecord,
@@ -40,6 +35,10 @@ from custom_components.pp_reader.util.currency import (
     round_currency,
     round_price,
 )
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator, Sequence
+    from pathlib import Path
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
@@ -518,7 +517,9 @@ def _resolve_average_cost_totals(
 
 
 def get_transactions(
-    db_path: Path | None = None, conn: sqlite3.Connection | None = None
+    db_path: Path | None = None,
+    conn: sqlite3.Connection | None = None,
+    end_date: date | None = None,
 ) -> list[Transaction]:
     """Lädt alle Transaktionen aus der DB."""
     if conn is None:
@@ -526,34 +527,40 @@ def get_transactions(
             raise ValueError(_MISSING_DB_RESOURCE_MESSAGE)
         conn = sqlite3.connect(str(db_path))
 
+    query = """
+        SELECT t.uuid, t.type, t.account, t.portfolio,
+                t.other_account, t.other_portfolio,
+                t.date, t.currency_code, t.amount,
+                t.shares, t.security,
+                CAST(COALESCE(SUM(CASE
+                    WHEN u.type = 2 THEN u.amount
+                    WHEN u.type = 13 THEN u.amount
+                    WHEN u.type = 14 THEN -u.amount
+                    ELSE 0 END), 0) AS INTEGER) as fees,
+                CAST(COALESCE(SUM(CASE
+                    WHEN u.type = 1 THEN u.amount
+                    WHEN u.type = 11 THEN u.amount
+                    WHEN u.type = 12 THEN -u.amount
+                    ELSE 0 END), 0) AS INTEGER) as taxes,
+                MAX(ufx.fx_amount) as fx_amount,
+                MAX(ufx.fx_currency_code) as fx_currency_code,
+                MAX(ufx.fx_rate_to_base) as fx_rate_to_base
+        FROM transactions t
+        LEFT JOIN transaction_units u ON t.uuid = u.transaction_uuid
+            AND u.type IN (1, 2, 11, 12, 13, 14)
+        LEFT JOIN transaction_units ufx ON t.uuid = ufx.transaction_uuid
+            AND ufx.fx_rate_to_base IS NOT NULL
+    """
+    params = []
+    if end_date:
+        query += " WHERE t.date <= ?"
+        params.append(end_date.isoformat() + "T23:59:59Z")
+
+    query += " GROUP BY t.uuid ORDER BY t.date"
+
     rows = []
     try:
-        cur = conn.execute("""
-            SELECT t.uuid, t.type, t.account, t.portfolio,
-                   t.other_account, t.other_portfolio,
-                   t.date, t.currency_code, t.amount,
-                   t.shares, t.security,
-                   CAST(COALESCE(SUM(CASE
-                       WHEN u.type = 2 THEN u.amount
-                       WHEN u.type = 13 THEN u.amount
-                       WHEN u.type = 14 THEN -u.amount
-                       ELSE 0 END), 0) AS INTEGER) as fees,
-                   CAST(COALESCE(SUM(CASE
-                       WHEN u.type = 1 THEN u.amount
-                       WHEN u.type = 11 THEN u.amount
-                       WHEN u.type = 12 THEN -u.amount
-                       ELSE 0 END), 0) AS INTEGER) as taxes,
-                   MAX(ufx.fx_amount) as fx_amount,
-                   MAX(ufx.fx_currency_code) as fx_currency_code,
-                   MAX(ufx.fx_rate_to_base) as fx_rate_to_base
-            FROM transactions t
-            LEFT JOIN transaction_units u ON t.uuid = u.transaction_uuid
-              AND u.type IN (1, 2, 11, 12, 13, 14)
-            LEFT JOIN transaction_units ufx ON t.uuid = ufx.transaction_uuid
-              AND ufx.fx_rate_to_base IS NOT NULL
-            GROUP BY t.uuid
-            ORDER BY t.date
-        """)
+        cur = conn.execute(query, params)
         rows = cur.fetchall()
     except sqlite3.Error:
         _LOGGER.exception("Fehler beim Laden der Transaktionen")
