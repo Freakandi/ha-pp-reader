@@ -14,22 +14,32 @@
     - `metrics/history.py` exists with `rebuild_daily_wealth` logic.
 
 ## 1. Security Metrics Refactor (`metrics/securities.py`)
-The `securities.py` module currently duplicates logic found in `PerformanceEngine`. It must be rewritten to delegate inventory and valuation logic to the engine/resolver.
+The `securities.py` module currently duplicates logic found in `PerformanceEngine`. It must be rewritten to delegate inventory and valuation logic to the engine/resolver. To achieve "Pure Delegation," the Engine must first be enhanced.
 
+### 1.1 Enhance `PerformanceEngine` (`metrics/calculator.py`)
+- [ ] **Update `_get_holdings_at_date`**:
+    - Add optional argument: `portfolio_uuid: str | None = None`.
+    - Filter `self._df_txs` by `portfolio == portfolio_uuid` (if provided) *before* calculating inventory.
+- [ ] **Update `get_snapshot`**:
+    - Add optional argument: `portfolio_uuid: str | None = None`.
+    - Pass this argument to `_get_holdings_at_date`, `_get_account_balances` (add filter there too), and `_calculate_invested_capital` (filter transactions first).
+
+### 1.2 Rewrite `securities.py`
 - [ ] **Import Dependencies**:
     - `from custom_components.pp_reader.metrics.calculator import PerformanceEngine`
     - `from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver`
 - [ ] **Rewrite `_compute_security_metrics_sync`**:
-    - Initialize `MarketResolver(conn)`.
-    - Initialize `PerformanceEngine(conn, market_resolver)`.
-    - **Inventory:** Call `engine.get_snapshot(today)` to get `securities_wealth` and `invested_capital`.
-    - **Detailed List:** Iterate `engine.get_snapshot`'s inventory or use `engine._get_holdings_at_date(today)` to get the list of active securities.
-    - **Enrichment:** For each security:
-        - Get Price: `market_resolver.get_price(uuid, today)`.
-        - Get FX: `market_resolver.get_fx(currency, today)`.
-        - Get Previous Close: `market_resolver.get_price(uuid, yesterday)` (or use db_access helper if optimized).
-        - **Gain Calculation:** Use `engine` logic or simple `(Current_Val - Cost_Basis)` logic (Cost basis from `transactions` history).
-    - **Output:** Construct `SecurityMetricRecord` objects consistent with the existing signature.
+    - Initialize `MarketResolver(conn)` and `PerformanceEngine(conn, market_resolver)`. Load data (`engine.load_data()`).
+    - **Loop Portfolios**: Query all portfolios from DB.
+    - **Per Portfolio**:
+        - Call `snapshot = engine.get_snapshot(today, portfolio_uuid=p_uuid)`.
+        - Extract `invested_capital` from snapshot for the *portfolio* (used for "Purchase Value" fallback).
+        - Call `holdings = engine._get_holdings_at_date(today, portfolio_uuid=p_uuid)` to get active securities in this portfolio.
+    - **Per Security (in Portfolio)**:
+        - Get Price/FX from `market_resolver`.
+        - Calculate `current_value` using `holdings[sec_uuid] * price`.
+        - **Gain Calculation:** Use simple `Current - Cost` (where Cost can be derived or simplified).
+    - **Output:** Construct `SecurityMetricRecord` objects.
 
 ## 2. History & Charts Refactor (`metrics/history.py` & `websocket.py`)
 Ensure historical data is pre-calculated in `daily_wealth` and simply queried by the UI.
