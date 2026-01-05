@@ -98,3 +98,37 @@
 *   **Next Phase:** Proceed to "Step 3: Transfer Neutrality Verification".
     *   While the current logic handles transfers (via `_augment_transfers`), a dedicated test case `tests/metrics/test_transfer_neutrality.py` is required by the plan to ensure zero-sum behavior across currencies.
 *   **Proceed to Step 4:** Implement Lifecycle FIFO Engine.
+
+# Assessment: PR #774 - Phase 3.1: Lifecycle FIFO Engine
+
+**Date:** 2026-01-05
+**Session ID:** 8703563097180695430
+**Author:** Jules (Agent)
+
+## 1. Execution Summary
+*   **Status:** Success (Code working, Linting needs fix).
+*   **Changes:**
+    *   Implemented `RealizedTrade` dataclass in `metrics/calculator.py`.
+    *   Implemented `calculate_realized_performance` method with FIFO matching logic, correct handling of transfers (cost basis preservation), and "Ghost Enrichment" (Opportunity Cost calculation).
+    *   Added two new verification test files: `tests/metrics/test_transfer_neutrality.py` and `tests/metrics/test_fifo_lifecycle.py`.
+
+## 2. Quality Check
+*   **Architecture:** Valid. Follows the separation of "Period Attribution" (Phase 3) and "Lifetime Trade Metrics" (Phase 3.1).
+*   **Logic:**
+    *   **Transfer Neutrality:** The test correctly verifies that `Net External Flow` (Invested Capital) is unaffected by internal transfers, and that FX losses on transfers are correctly captured in `absolute_performance` (System Delta).
+    *   **FIFO Engine:** Correctly handles multiple lots, partial sells, and cost basis tracking.
+*   **Linting:** Failed (7 errors).
+    *   `PLR0912`: Too many branches in `calculate_realized_performance`.
+    *   `PLR0915`: Too many statements in `calculate_realized_performance`.
+    *   `F401`: Unused imports in tests.
+    *   `D413`/`E501`: Minor style issues.
+
+## 3. Test Results
+*   `tests/metrics/test_transfer_neutrality.py`: ✅ **PASSED**.
+*   `tests/metrics/test_fifo_lifecycle.py`: ✅ **PASSED**.
+
+## 4. Recommendations
+*   **Immediate Action:**
+    *   Fix unused imports in tests.
+    *   Refactor `calculate_realized_performance` to reduce cyclomatic complexity (extract methods for inbound/outbound/transfer handling).
+*   **Next Phase:** Proceed to integration/cleanup or next planned phase.

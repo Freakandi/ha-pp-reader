@@ -49,12 +49,12 @@ Implement the core mathematical verification engine ("The Chain") and the detail
             *   **FX Cash:** `(End_Val - Start_Val) - Net_Flow_EUR`.
             *   **Income/Costs:** Sum `amount_eur_cents` (normalized) from `transactions`/`units`.
         *   **Invariant Check:** Log warning if `System_Delta != Sum(Components)`.
-- [ ] **Step 3: Transfer Neutrality Verification**
+- [x] **Step 3: Transfer Neutrality Verification**
     *   Ensure the "FX Cash" calculation handles Foreign-to-Foreign transfers correctly.
     *   Since Phase 1 ensures `amount_eur_cents` sums to 0.00 for transfers, the "Net Flow" component in the FX formula `(End - Start) - Net_Flow` naturally absorbs the transfer "loss" into the FX Bucket without creating a ghost delta. verify this with a test case.
 
 ### Block 2: Lifetime Realized Performance (FIFO)
-- [ ] **Step 4: Implement Lifecycle FIFO Engine**
+- [x] **Step 4: Implement Lifecycle FIFO Engine**
     *   Implement `calculate_realized_performance(scope_uuid)`:
         *   Load all transactions for scope (sorted by date).
         *   Maintain `TaxLot` queue `{date, shares, cost_basis_eur}`.
@@ -84,7 +84,7 @@ Implement the core mathematical verification engine ("The Chain") and the detail
     *   Delete `metrics/breakdown.py`.
     *   Delete `backdating/engine_pandas.py`.
     *   Remove obsolete methods from `PerformanceEngine` (`_prepare_market_data`, pivot logic).
-- [ ] **Step 8: Verification Testing**
+- [x] **Step 8: Verification Testing**
     *   Update `tests/metrics/test_performance_summation.py` to cover the Invariant Check.
     *   Add `tests/metrics/test_transfer_neutrality.py`: Create a pure test case for USD->JPY transfer and assert `Net Flow == 0` for the system.
     *   Add `tests/metrics/test_fifo_lifecycle.py`: Verify FIFO queue logic matches manual calculations.
