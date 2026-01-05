@@ -189,3 +189,25 @@ class MarketResolver:
         )
         pivot_reindexed = pivot_unfilled.reindex(date_range)
         return pivot_reindexed.ffill().bfill()
+
+    def is_price_stale(self, sec_uuid: str, d: date | pd.Timestamp) -> bool:
+        """Check if the price for a security on a given date is stale (>7 days old)."""
+        ts = pd.Timestamp(d)
+        ts = (
+            ts.tz_localize("UTC")
+            if ts.tzinfo is None
+            else ts.tz_convert("UTC")
+        )
+
+        if sec_uuid not in self._prices_idx.index.get_level_values(0):
+            return True
+
+        sec_prices = self._prices_idx.loc[sec_uuid]
+        loc = sec_prices.index.searchsorted(ts, side="right")
+
+        if loc == 0:
+            return True  # No price before or at date
+
+        last_date = sec_prices.index[loc - 1]
+        age = (ts - last_date).days
+        return age > 7  # noqa: PLR2004

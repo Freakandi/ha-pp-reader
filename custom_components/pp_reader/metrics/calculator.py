@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import dataclasses
 import logging
 import sqlite3
 from collections import defaultdict, deque
@@ -25,9 +26,11 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+
 _CONVERGENCE_THRESHOLD = 1e-6
 _BREAKDOWN_THRESHOLD = 0.01
 _GAIN_EPSILON = 1e-6
+_ZERO_AMOUNT_EPSILON = 0.0001
 
 
 # Constants from TransactionType in engine_pandas.py
@@ -228,7 +231,12 @@ class PerformanceEngine:
             if tx.type in flow_types:
                 sign = flow_types[tx.type]
                 value_eur = 0.0
-                tx_ts = datetime.fromisoformat(tx.date).replace(tzinfo=UTC)
+                if isinstance(tx.date, str):
+                    tx_ts = datetime.fromisoformat(tx.date).replace(tzinfo=UTC)
+                else:
+                    tx_ts = pd.Timestamp(tx.date).to_pydatetime()
+                    if tx_ts.tzinfo is None:
+                        tx_ts = tx_ts.replace(tzinfo=UTC)
 
                 if tx.security and tx.shares is not None:
                     price = self.market_resolver.get_price(tx.security, tx_ts)
@@ -255,7 +263,7 @@ class PerformanceEngine:
         "today" are up-to-date.
         """
         # transactions
-        query_txs = "SELECT uuid, type, date, account, other_account, security, shares, amount, currency_code FROM transactions ORDER BY date"  # noqa: E501
+        query_txs = "SELECT uuid, type, date, account, other_account, portfolio, other_portfolio, security, shares, amount, currency_code FROM transactions ORDER BY date"  # noqa: E501
         try:
             self._df_txs = pd.read_sql_query(query_txs, self.conn, parse_dates=["date"])
         except pd.errors.DatabaseError:
@@ -266,6 +274,8 @@ class PerformanceEngine:
                     "date",
                     "account",
                     "other_account",
+                    "portfolio",
+                    "other_portfolio",
                     "security",
                     "shares",
                     "amount",
@@ -783,9 +793,11 @@ class PerformanceEngine:
         )
         df_txs_window = self._df_txs[window_mask]
 
-        transactions = [
-            Transaction(**row) for row in df_txs_window.to_dict("records")
-        ]
+        valid_fields = {f.name for f in dataclasses.fields(Transaction)}
+        transactions = []
+        for row in df_txs_window.to_dict("records"):
+            clean_row = {k: v for k, v in row.items() if k in valid_fields}
+            transactions.append(Transaction(**clean_row))
         realized, unrealized = self._calculate_capital_gains(
             transactions,
             start_date,
@@ -1536,7 +1548,7 @@ class PerformanceEngine:
         )
         return sum(realized_map.values()), sum(unrealized_map.values())
 
-    def _calculate_capital_gains_detailed(
+    def _calculate_capital_gains_detailed(  # noqa: PLR0912
         self,
         transactions: list[Transaction],
         start_date: date,
@@ -1561,12 +1573,34 @@ class PerformanceEngine:
             if not sec_id or not tx.shares:
                 continue
 
-            tx_date = datetime.fromisoformat(tx.date).replace(tzinfo=UTC)
-            shares = abs(tx.shares / 1e8)
+            if isinstance(tx.date, str):
+                tx_date = datetime.fromisoformat(tx.date).replace(tzinfo=UTC)
+            else:
+                tx_date = pd.Timestamp(tx.date).to_pydatetime()
+                if tx_date.tzinfo is None:
+                    tx_date = tx_date.replace(tzinfo=UTC)
+            shares_raw = tx.shares / 1e8
+            shares = abs(shares_raw)
 
-            if tx.type in {TransactionType.BUY, TransactionType.INBOUND_DELIVERY}:
+            is_inbound = tx.type in {
+                TransactionType.BUY,
+                TransactionType.INBOUND_DELIVERY,
+            } or (tx.type == TransactionType.SECURITY_TRANSFER and shares_raw > 0)
+
+            is_outbound = tx.type in {
+                TransactionType.SELL,
+                TransactionType.OUTBOUND_DELIVERY,
+            } or (tx.type == TransactionType.SECURITY_TRANSFER and shares_raw < 0)
+
+            if is_inbound:
                 net_amount = abs(tx.amount - tx.fees - tx.taxes)
-                price_native = (net_amount / 100.0) / shares if shares else 0.0
+                if net_amount < _ZERO_AMOUNT_EPSILON and tx.type in {
+                    TransactionType.INBOUND_DELIVERY,
+                    TransactionType.SECURITY_TRANSFER,
+                }:
+                    price_native = self.market_resolver.get_price(sec_id, tx_date)
+                else:
+                    price_native = (net_amount / 100.0) / shares if shares else 0.0
                 fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_date)
 
                 if sec_id not in inventory:
@@ -1580,7 +1614,7 @@ class PerformanceEngine:
                     )
                 )
 
-            elif tx.type in {TransactionType.SELL, TransactionType.OUTBOUND_DELIVERY}:
+            elif is_outbound:
                 gross_proceeds = abs(tx.amount + tx.fees + tx.taxes)
                 sale_price_native = (
                     (gross_proceeds / 100.0) / shares if shares else 0.0
