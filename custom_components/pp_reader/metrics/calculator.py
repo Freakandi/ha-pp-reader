@@ -14,6 +14,12 @@ import numpy as np
 import pandas as pd
 
 from custom_components.pp_reader.data import db_access
+from custom_components.pp_reader.const import (
+    SHARE_EPSILON,
+    TransactionType,
+    UnitType,
+)
+from custom_components.pp_reader.data import db_access
 from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.metrics.breakdown import (
     BreakdownItem,
@@ -377,178 +383,6 @@ class PerformanceEngine:
             "securities_wealth": sec_wealth,
             "cash_wealth": cash_wealth,
         }
-
-    def get_daily_wealth(  # noqa: PLR0912, PLR0915
-        self, start_date: date, end_date: date
-    ) -> pd.DataFrame:
-        """
-        Calculate daily wealth metrics for a given date range.
-
-        This method produces a time series DataFrame with key financial metrics
-        for each day in the specified range, such as total wealth, invested
-        capital, and various cash flow buckets.
-        """
-        date_range = pd.date_range(start=start_date, end=end_date, freq="D", tz="UTC")
-
-        # Create extended range for FX/Prices to cover full history (for Balances)
-        # Assuming earliest transaction matters.
-        first_tx = self._df_txs["date"].min()
-
-        # Ensure start_date is a Timestamp for comparison.
-        # Since we use tz="UTC" for date_range, we assume UTC here.
-        start_date_ts = pd.Timestamp(start_date)
-        if start_date_ts.tzinfo is None:
-            start_date_ts = start_date_ts.tz_localize("UTC")
-
-        if pd.notna(first_tx) and first_tx < start_date_ts:
-            _ = first_tx
-        else:
-            _ = start_date_ts
-
-        # Ensure end_date is also UTC for range generation
-        end_date_ts = pd.Timestamp(end_date)
-        if end_date_ts.tzinfo is None:
-            end_date_ts = end_date_ts.tz_localize("UTC")
-
-        # unified_resolver: Pivot tables are no longer generated here.
-        # All calculations will rely on scalar lookups against the MarketResolver.
-        df_augmented = self._augment_txs_with_market_data(self._df_txs)
-
-        # Add amount_eur column, which is essential for many downstream calcs
-        # Guard against division by zero for fx_rate.
-        df_augmented["amount_eur"] = np.where(
-            df_augmented["fx_rate"] != 0,
-            (df_augmented["amount_norm"]) / df_augmented["fx_rate"],
-            0.0,
-        )
-
-        daily_neutral_flow = self._calculate_gross_neutral_flows(
-            df_augmented, date_range
-        )
-        daily_invested_cum = daily_neutral_flow.cumsum().fillna(0.0)
-
-        div_flow, int_net, fees_net, taxes_net = self._calculate_cash_accumulators(
-            df_augmented, self._df_units, self._df_txs, date_range
-        )
-
-        daily_sec_wealth, sec_holdings = self._calculate_security_wealth(
-            df_augmented, date_range
-        )
-
-        daily_cash_wealth, acc_balances = self._calculate_cash_wealth(
-            self._df_txs, date_range
-        )
-
-        # unified_resolver: Stale price detection using daily scalar lookups.
-        stale_flags = []
-        for d in date_range:
-            stale_for_day = False
-            if d in sec_holdings.index:
-                holdings_on_date = sec_holdings.loc[d]
-                held_securities = holdings_on_date[
-                    holdings_on_date.abs() > _SHARE_EPSILON
-                ].index
-                for sec_uuid in held_securities:
-                    if self.market_resolver.is_price_stale(sec_uuid, d):
-                        stale_for_day = True
-                        break
-            stale_flags.append(stale_for_day)
-        daily_stale_flag = pd.Series(stale_flags, index=date_range)
-
-        result = pd.DataFrame(index=date_range)
-        result["invested_capital_eur"] = daily_invested_cum.fillna(0).round(2)
-        result["portfolio_wealth_eur"] = daily_sec_wealth.fillna(0).round(2)
-        result["account_wealth_eur"] = daily_cash_wealth.fillna(0).round(2)
-        result["total_wealth_eur"] = (
-            daily_sec_wealth.fillna(0) + daily_cash_wealth.fillna(0)
-        ).round(2)
-        result["dividends_eur"] = div_flow.fillna(0).round(2)
-        result["interest_eur"] = int_net.fillna(0).round(2)
-        result["fees_eur"] = fees_net.fillna(0).round(2)
-        result["taxes_eur"] = taxes_net.fillna(0).round(2)
-
-        # FIFO Gains Calculation
-        s_realized_flow, s_cost_basis = self._calculate_fifo_series(
-            start_date, end_date
-        )
-        daily_realized = s_realized_flow.reindex(date_range, fill_value=0.0)
-        daily_basis = s_cost_basis.reindex(date_range, method="ffill").fillna(0.0)
-
-        daily_unrealized = daily_sec_wealth.fillna(0.0) - daily_basis
-
-        result["realized_gains_eur"] = daily_realized.round(2)
-        result["unrealized_gains_eur"] = daily_unrealized.round(2)
-
-        result["performance_neutral_movements"] = daily_neutral_flow.round(2)
-        result["inbound_transfers_eur"] = 0.0
-        result["outbound_transfers_eur"] = 0.0
-        result["stale_price"] = daily_stale_flag.astype(int)
-        result["provenance"] = "performance_engine"
-
-        result = result.reset_index().rename(columns={"index": "date"})
-        result["date"] = result["date"].dt.strftime("%Y-%m-%d")
-
-        if not result.empty:
-            last_row = result.iloc[-1]
-            _LOGGER.debug(
-                "Performance End Wealth Debug: Date=%s, Total=%.2f, Invested=%.2f",
-                last_row["date"],
-                last_row["total_wealth_eur"],
-                last_row["invested_capital_eur"],
-            )
-
-            # --- DEBUG: Detailed Breakdown Logic ---
-            try:
-                # End state only
-                e_ts = pd.Timestamp(end_date, tz="UTC")
-
-                # Securities
-                if not sec_holdings.empty and e_ts in sec_holdings.index:
-                    sh_row = sec_holdings.loc[e_ts]
-                    held = sh_row[sh_row.abs() > 1e-6]  # noqa: PLR2004
-                    if not held.empty:
-                        _LOGGER.debug("--- Security Breakdown for %s ---", end_date)
-                        for sec_uuid, qty in held.items():
-                            sec_name = self._resolve_sec_name(sec_uuid)
-                            # unified_resolver: Use scalar lookups for debug info
-                            price = self._get_price(sec_uuid, e_ts)
-                            curr = self.market_resolver.get_security_currency(sec_uuid)
-                            rate = self._get_fx(curr, e_ts)
-
-                            val_eur = (qty * price) / rate if rate else 0.0
-                            _LOGGER.debug(
-                                "SEC: %s | Qty=%.4f | P=%.4f | "
-                                "FX=%.4f (%s) | ValEUR=%.2f",
-                                sec_name,
-                                qty,
-                                price,
-                                rate,
-                                curr,
-                                val_eur,
-                            )
-
-                # Cash
-                if not acc_balances.empty and e_ts in acc_balances.index:
-                    ab_row = acc_balances.loc[e_ts]
-                    held_cash = ab_row[ab_row.abs() > 0.005]  # noqa: PLR2004
-                    if not held_cash.empty:
-                        _LOGGER.debug("--- Cash Breakdown for %s ---", end_date)
-                        for (acc_uuid, curr), balance in held_cash.items():
-                            acc_name = self._resolve_acc_name(acc_uuid)
-                            rate = self._get_fx(curr, e_ts)
-                            val_eur = balance / rate if rate else 0.0
-                            _LOGGER.debug(
-                                "CASH: %s (%s) | Bal=%.2f | FX=%.4f | ValEUR=%.2f",
-                                acc_name,
-                                curr,
-                                balance,
-                                rate,
-                                val_eur,
-                            )
-            except Exception:
-                _LOGGER.exception("Failed to dump breakdown debug logs")
-
-        return result
 
     def _augment_transfers(  # noqa: PLR0915, PLR0912
         self, df_transfers: pd.DataFrame
