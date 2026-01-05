@@ -8,7 +8,7 @@ import sqlite3
 from collections import defaultdict, deque
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -766,7 +766,7 @@ class PerformanceEngine:
         self, scope_uuid: str | None = None
     ) -> list[RealizedTrade]:
         """
-        Calculate all realized trades over the entire transaction history using FIFO logic.
+        Calculate realized trades for history using FIFO logic.
 
         This method processes all security transactions to match buys and sells,
         calculating the realized gain for each closed trade.
@@ -778,6 +778,7 @@ class PerformanceEngine:
 
         Returns:
             A list of RealizedTrade objects representing all closed trades.
+
         """
         if self._df_txs.empty:
             self.load_data()
@@ -820,6 +821,9 @@ class PerformanceEngine:
                 continue
 
             tx_date = tx_row.date.to_pydatetime()
+            if tx_date.tzinfo is None:
+                tx_date = tx_date.replace(tzinfo=UTC)
+
             shares = abs(tx_row.shares_norm)
             tx_units = units_payload.get(tx_row.uuid, {})
             fees = tx_units.get("fees", 0)
@@ -827,32 +831,8 @@ class PerformanceEngine:
 
             # Inbound: BUY, INBOUND_DELIVERY
             if tx_row.type in {TransactionType.BUY, TransactionType.INBOUND_DELIVERY}:
-                net_amount = (
-                    abs(tx_row.amount) - fees - taxes
-                    if tx_row.amount is not None
-                    else 0
-                )
-
-                if (
-                    net_amount < _ZERO_AMOUNT_EPSILON
-                    and tx_row.type == TransactionType.INBOUND_DELIVERY
-                ):
-                    price_native = self.market_resolver.get_price(sec_id, tx_date)
-                else:
-                    price_native = (net_amount / 100.0) / shares if shares > 0 else 0.0
-
-                fx_rate = self.market_resolver.get_fx(tx_row.currency_code, tx_date)
-
-                if sec_id not in inventory:
-                    inventory[sec_id] = deque()
-
-                inventory[sec_id].append(
-                    Lot(
-                        date=tx_date,
-                        shares=shares,
-                        price_native=price_native,
-                        fx_rate=fx_rate,
-                    )
+                self._process_fifo_inbound(
+                    tx_row, sec_id, tx_date, shares, fees, taxes, inventory
                 )
 
             # Outbound: SELL, OUTBOUND_DELIVERY
@@ -860,84 +840,141 @@ class PerformanceEngine:
                 TransactionType.SELL,
                 TransactionType.OUTBOUND_DELIVERY,
             }:
-                gross_proceeds = (
-                    abs(tx_row.amount) + fees + taxes
-                    if tx_row.amount is not None
-                    else 0
+                self._process_fifo_outbound(
+                    tx_row,
+                    sec_id,
+                    tx_date,
+                    shares,
+                    fees,
+                    taxes,
+                    inventory,
+                    realized_trades,
+                    today,
                 )
-
-                if (
-                    gross_proceeds < _ZERO_AMOUNT_EPSILON
-                    and tx_row.type == TransactionType.OUTBOUND_DELIVERY
-                ):
-                    sale_price_native = self.market_resolver.get_price(sec_id, tx_date)
-                else:
-                    sale_price_native = (
-                        (gross_proceeds / 100.0) / shares if shares > 0 else 0.0
-                    )
-
-                sale_fx_rate = self.market_resolver.get_fx(tx_row.currency_code, tx_date)
-                sale_price_eur = (
-                    sale_price_native / sale_fx_rate
-                    if sale_fx_rate and sale_fx_rate != 0
-                    else 0.0
-                )
-
-                if sec_id in inventory:
-                    lots_to_process = inventory[sec_id]
-                    remaining_shares_to_sell = shares
-
-                    while remaining_shares_to_sell > _SHARE_EPSILON and lots_to_process:
-                        lot = lots_to_process[0]
-                        shares_from_lot = min(lot.shares, remaining_shares_to_sell)
-
-                        lot.shares -= shares_from_lot
-                        remaining_shares_to_sell -= shares_from_lot
-
-                        buy_price_eur = (
-                            lot.price_native / lot.fx_rate
-                            if lot.fx_rate and lot.fx_rate != 0
-                            else 0.0
-                        )
-                        buy_cost_total_eur = buy_price_eur * shares_from_lot
-                        sell_value_total_eur = sale_price_eur * shares_from_lot
-                        gain = sell_value_total_eur - buy_cost_total_eur
-
-                        current_price_native = self.market_resolver.get_price(
-                            sec_id, today
-                        )
-                        security_currency = self.market_resolver.get_security_currency(
-                            sec_id
-                        )
-                        current_fx_rate = self.market_resolver.get_fx(
-                            security_currency, today
-                        )
-                        current_price_eur = (
-                            current_price_native / current_fx_rate
-                            if current_fx_rate and current_fx_rate != 0
-                            else 0.0
-                        )
-                        opportunity_cost = (
-                            current_price_eur - sale_price_eur
-                        ) * shares_from_lot
-
-                        realized_trades.append(
-                            RealizedTrade(
-                                security_uuid=sec_id,
-                                buy_date=lot.date,
-                                sell_date=tx_date,
-                                shares=shares_from_lot,
-                                buy_cost_eur=buy_cost_total_eur,
-                                sell_value_eur=sell_value_total_eur,
-                                realized_gain_eur=gain,
-                                opportunity_gain_eur=opportunity_cost,
-                            )
-                        )
-
-                        if lot.shares < _SHARE_EPSILON:
-                            lots_to_process.popleft()
 
         return realized_trades
+
+    def _process_fifo_inbound(
+        self,
+        tx_row: Any,
+        sec_id: str,
+        tx_date: datetime,
+        shares: float,
+        fees: float,
+        taxes: float,
+        inventory: dict[str, deque[Lot]],
+    ) -> None:
+        """Process an inbound transaction (Buy/Delivery) adding to FIFO inventory."""
+        net_amount = (
+            abs(tx_row.amount) - fees - taxes if tx_row.amount is not None else 0
+        )
+
+        if (
+            net_amount < _ZERO_AMOUNT_EPSILON
+            and tx_row.type == TransactionType.INBOUND_DELIVERY
+        ):
+            price_native = self.market_resolver.get_price(sec_id, tx_date)
+        else:
+            price_native = (net_amount / 100.0) / shares if shares > 0 else 0.0
+
+        fx_rate = self.market_resolver.get_fx(tx_row.currency_code, tx_date)
+
+        if sec_id not in inventory:
+            inventory[sec_id] = deque()
+
+        inventory[sec_id].append(
+            Lot(
+                date=tx_date,
+                shares=shares,
+                price_native=price_native,
+                fx_rate=fx_rate,
+            )
+        )
+
+    def _process_fifo_outbound(
+        self,
+        tx_row: Any,
+        sec_id: str,
+        tx_date: datetime,
+        shares: float,
+        fees: float,
+        taxes: float,
+        inventory: dict[str, deque[Lot]],
+        realized_trades: list[RealizedTrade],
+        today: datetime,
+    ) -> None:
+        """
+        Process an outbound transaction (Sell/Delivery).
+
+        Matches against FIFO inventory and calculates realized gains/losses.
+        """
+        gross_proceeds = (
+            abs(tx_row.amount) + fees + taxes if tx_row.amount is not None else 0
+        )
+
+        if (
+            gross_proceeds < _ZERO_AMOUNT_EPSILON
+            and tx_row.type == TransactionType.OUTBOUND_DELIVERY
+        ):
+            sale_price_native = self.market_resolver.get_price(sec_id, tx_date)
+        else:
+            sale_price_native = (gross_proceeds / 100.0) / shares if shares > 0 else 0.0
+
+        sale_fx_rate = self.market_resolver.get_fx(tx_row.currency_code, tx_date)
+        sale_price_eur = (
+            sale_price_native / sale_fx_rate
+            if sale_fx_rate and sale_fx_rate != 0
+            else 0.0
+        )
+
+        if sec_id in inventory:
+            lots_to_process = inventory[sec_id]
+            remaining_shares_to_sell = shares
+
+            while remaining_shares_to_sell > _SHARE_EPSILON and lots_to_process:
+                lot = lots_to_process[0]
+                shares_from_lot = min(lot.shares, remaining_shares_to_sell)
+
+                lot.shares -= shares_from_lot
+                remaining_shares_to_sell -= shares_from_lot
+
+                buy_price_eur = (
+                    lot.price_native / lot.fx_rate
+                    if lot.fx_rate and lot.fx_rate != 0
+                    else 0.0
+                )
+                buy_cost_total_eur = buy_price_eur * shares_from_lot
+                sell_value_total_eur = sale_price_eur * shares_from_lot
+                gain = sell_value_total_eur - buy_cost_total_eur
+
+                # Ghost Enrichment (Opportunity Cost against Today)
+                current_price_native = self.market_resolver.get_price(sec_id, today)
+                sec_curr = self.market_resolver.get_security_currency(sec_id)
+                current_fx_rate = self.market_resolver.get_fx(sec_curr, today)
+                current_price_eur = (
+                    current_price_native / current_fx_rate
+                    if current_fx_rate and current_fx_rate != 0
+                    else 0.0
+                )
+                opportunity_cost = (
+                    current_price_eur - sale_price_eur
+                ) * shares_from_lot
+
+                realized_trades.append(
+                    RealizedTrade(
+                        security_uuid=sec_id,
+                        buy_date=lot.date,
+                        sell_date=tx_date,
+                        shares=shares_from_lot,
+                        buy_cost_eur=buy_cost_total_eur,
+                        sell_value_eur=sell_value_total_eur,
+                        realized_gain_eur=gain,
+                        opportunity_gain_eur=opportunity_cost,
+                    )
+                )
+
+                if lot.shares < _SHARE_EPSILON:
+                    lots_to_process.popleft()
 
     def _resolve_sec_name(self, uuid_val: str) -> str:
         return self._sec_name_map.get(uuid_val, f"Security {uuid_val[:8]}")

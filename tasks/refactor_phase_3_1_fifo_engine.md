@@ -33,13 +33,13 @@ Implement the core Transfer Neutrality verification to ensure "no-ghost" flows, 
 ## Detailed Steps
 
 ### Step 1: Transfer Neutrality Verification
-- [ ] **Create Test:** `tests/metrics/test_transfer_neutrality.py`.
-- [ ] **Scenario:**
+- [x] **Create Test:** `tests/metrics/test_transfer_neutrality.py`.
+- [x] **Scenario:**
     1.  Deposit 1000 EUR.
     2.  Transfer 1000 EUR -> 1100 USD (Fx 0.91).
     3.  Transfer 1100 USD -> 150000 JPY.
     4.  Transfer 150000 JPY -> 950 EUR. (Round trip loss of 50 EUR).
-- [ ] **Assertions:**
+- [x] **Assertions:**
     *   `Global Net External Flow` must be +1000 (Initial Deposit) or +950 (Net)?
     *   Wait, Transfers are "Neutral". The system should see:
         *   Deposit +1000 EUR.
@@ -47,29 +47,29 @@ Implement the core Transfer Neutrality verification to ensure "no-ghost" flows, 
         *   Value at End = 950 EUR.
         *   Performance = -50 EUR (FX Loss).
         *   **Crucially:** `Net External Flow` (Invested Capital) must be exactly +1000. It must *not* be affected by the transfer steps.
-- [ ] **Execution:** Run the test. Fix `calculator.py` ONLY IF it fails (it shouldn't, given the Phase 1 Ingestion averaging, but verification is mandatory).
+- [x] **Execution:** Run the test. Fix `calculator.py` ONLY IF it fails (it shouldn't, given the Phase 1 Ingestion averaging, but verification is mandatory).
 
 ### Step 2: Implement Realized Performance (FIFO)
-- [ ] **Define Data Structure:** Ensure `RealizedTrade` dataclass exists (likely in `calculator.py` or separate DTO file).
+- [x] **Define Data Structure:** Ensure `RealizedTrade` dataclass exists (likely in `calculator.py` or separate DTO file).
     *   Fields: `security_uuid`, `buy_date`, `sell_date`, `shares`, `buy_cost_eur`, `sell_value_eur`, `realized_gain_eur`, `opportunity_gain_eur` (Ghost).
-- [ ] **Implement Method:** `calculate_realized_performance` in `PerformanceEngine`.
+- [x] **Implement Method:** `calculate_realized_performance` in `PerformanceEngine`.
     *   Use `_get_transactions_up_to(Today)`.
     *   Iterate and apply FIFO matching.
     *   Handle `TransactionType.SECURITY_TRANSFER`?
         *   If internal transfer: Maintain original cost basis (Pass the Lot).
         *   If external: Treat as Buy/Sell? Usually Internal.
         *   *Decision:* Transfers preserve cost basis.
-- [ ] **Implement Ghost Lookup:**
+- [x] **Implement Ghost Lookup:**
     *   Start Date for "Today" price lookup.
     *   Call `market_resolver.get_price(sec_uuid, Now)`.
 
 ### Step 3: Verification (FIFO)
-- [ ] **Create Test:** `tests/metrics/test_fifo_lifecycle.py`.
-- [ ] **Scenario:**
+- [x] **Create Test:** `tests/metrics/test_fifo_lifecycle.py`.
+- [x] **Scenario:**
     1.  Buy 10 @ 100.
     2.  Buy 10 @ 200.
     3.  Sell 15 @ 300.
-- [ ] **Assertions:**
+- [x] **Assertions:**
     *   Trade 1: 10 shares. Buy 100. Sell 300. Gain 2000.
     *   Trade 2: 5 shares. Buy 200. Sell 300. Gain 500.
     *   Remaining Inventory: 5 shares @ 200.
