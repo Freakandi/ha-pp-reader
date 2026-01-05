@@ -7,6 +7,7 @@ from datetime import date, timedelta
 import pytest
 
 from custom_components.pp_reader.metrics.calculator import PerformanceEngine
+from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver
 
 
 def test_summation_with_cash_flows_and_fx():
@@ -19,7 +20,7 @@ def test_summation_with_cash_flows_and_fx():
     # Schema
     conn.execute("""
         CREATE TABLE transactions (
-            uuid TEXT, type INTEGER, date TEXT, account TEXT, other_account TEXT, portfolio TEXT,
+            uuid TEXT, type INTEGER, date TEXT, account TEXT, other_account TEXT, portfolio TEXT, other_portfolio TEXT,
             security TEXT, shares INTEGER, amount INTEGER, currency_code TEXT
         )
     """)
@@ -74,8 +75,20 @@ def test_summation_with_cash_flows_and_fx():
     # Transactions
     # 1. Deposit (T_mid). 100 USD (Gross) -> 90 USD (Net) + 10 USD Fee.
     conn.execute(
-        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?)",
-        ("t_dep", 6, "2023-01-15T12:00:00", "acc1", None, None, None, 0, 9000, "USD"),
+        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "t_dep",
+            6,
+            "2023-01-15T12:00:00",
+            "acc1",
+            None,
+            None,
+            None,
+            None,
+            0,
+            9000,
+            "USD",
+        ),
     )  # Net Amount 90.00
 
     # Unit: Fee 10 USD
@@ -86,7 +99,9 @@ def test_summation_with_cash_flows_and_fx():
 
     conn.commit()
 
-    engine = PerformanceEngine(conn)
+    market_resolver = MarketResolver(conn)
+    market_resolver.load_data()
+    engine = PerformanceEngine(conn, market_resolver)
     engine.load_data()
 
     # Dates
@@ -162,7 +177,7 @@ def test_summation_with_all_neutral_types():
     # Schema
     conn.execute("""
         CREATE TABLE transactions (
-            uuid TEXT, type INTEGER, date TEXT, account TEXT, other_account TEXT, portfolio TEXT,
+            uuid TEXT, type INTEGER, date TEXT, account TEXT, other_account TEXT, portfolio TEXT, other_portfolio TEXT,
             security TEXT, shares INTEGER, amount INTEGER, currency_code TEXT
         )
     """)
@@ -211,8 +226,20 @@ def test_summation_with_all_neutral_types():
 
     # 1. Deposit 1000 EUR (Start Money) - Day 1
     conn.execute(
-        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?)",
-        ("t1", 6, "2023-01-02T10:00:00", "acc1", None, None, None, 0, 100000, "EUR"),
+        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "t1",
+            6,
+            "2023-01-02T10:00:00",
+            "acc1",
+            None,
+            None,
+            None,
+            None,
+            0,
+            100000,
+            "EUR",
+        ),
     )  # Net 1000. No fee. Neutral = +1000.
 
     # 2. Removal with Fee.
@@ -236,8 +263,20 @@ def test_summation_with_all_neutral_types():
     # 900 = 1000 - 98 - 2 = 900. Matches.
 
     conn.execute(
-        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?)",
-        ("t2", 7, "2023-01-05T10:00:00", "acc1", None, None, None, 0, 10000, "EUR"),
+        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "t2",
+            7,
+            "2023-01-05T10:00:00",
+            "acc1",
+            None,
+            None,
+            None,
+            None,
+            0,
+            10000,
+            "EUR",
+        ),
     )  # Amount 100.00 (Positive magnitude, Sign -1 applied by type)
     conn.execute(
         "INSERT INTO transaction_units VALUES (?,?,?,?,?,?)",
@@ -251,7 +290,7 @@ def test_summation_with_all_neutral_types():
     # shares_norm = shares / 10^8.
     # So 10 shares becomes 10 * 10^8.
     conn.execute(
-        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
             "t3",
             4,
@@ -259,6 +298,7 @@ def test_summation_with_all_neutral_types():
             None,
             None,
             "p1",
+            None,
             "sec1",
             1000000000,
             0,
@@ -291,7 +331,9 @@ def test_summation_with_all_neutral_types():
     # Matches End Wealth (2100).
 
     conn.commit()
-    engine = PerformanceEngine(conn)
+    market_resolver = MarketResolver(conn)
+    market_resolver.load_data()
+    engine = PerformanceEngine(conn, market_resolver)
     engine.load_data()
 
     start_date = date(2023, 1, 1)

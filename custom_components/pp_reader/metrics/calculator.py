@@ -1,15 +1,20 @@
 """Unified Performance Engine for on-the-fly calculations."""
 
+from __future__ import annotations
+
+import dataclasses
 import logging
 import sqlite3
-from collections import deque
+from collections import defaultdict, deque
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
 
+from custom_components.pp_reader.data import db_access
+from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.metrics.breakdown import (
     BreakdownItem,
     PerformanceBreakdown,
@@ -21,9 +26,11 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+
 _CONVERGENCE_THRESHOLD = 1e-6
 _BREAKDOWN_THRESHOLD = 0.01
 _GAIN_EPSILON = 1e-6
+_ZERO_AMOUNT_EPSILON = 0.0001
 
 
 # Constants from TransactionType in engine_pandas.py
@@ -87,7 +94,7 @@ class PerformanceEngine:
     """
 
     def __init__(
-        self, conn: sqlite3.Connection, market_resolver: "MarketResolver"
+        self, conn: sqlite3.Connection, market_resolver: MarketResolver
     ) -> None:
         """Initialize with a database connection."""
         self.conn = conn
@@ -97,6 +104,154 @@ class PerformanceEngine:
         self._account_currencies: dict[str, str] = {}
         self._account_name_map: dict[str, str] = {}
         self._sec_name_map: dict[str, str] = {}
+
+    def get_snapshot(self, snapshot_date: date) -> dict[str, float]:
+        """
+        Calculate portfolio valuation (Wealth) at a specific date.
+
+        Provides a Single Source of Truth for point-in-time valuation.
+
+        Returns
+        -------
+            A dictionary containing:
+            - "total_wealth": Total portfolio value in EUR.
+            - "securities_wealth": Value of all securities in EUR.
+            - "cash_wealth": Value of all cash accounts in EUR.
+            - "invested_capital": Total invested capital in EUR.
+
+        """
+        transactions = self._get_transactions_up_to(snapshot_date)
+        valuation_ts = datetime(
+            snapshot_date.year,
+            snapshot_date.month,
+            snapshot_date.day,
+            tzinfo=UTC,
+        )
+
+        # 1. Securities Wealth
+        security_inventory = self._calculate_security_inventory(transactions)
+        securities_wealth = 0.0
+        for sec_uuid, quantity in security_inventory.items():
+            price = self.market_resolver.get_price(sec_uuid, valuation_ts)
+            currency = self.market_resolver.get_security_currency(sec_uuid)
+            fx_rate = self.market_resolver.get_fx(currency, valuation_ts)
+            value_eur = (quantity * price) / (fx_rate if fx_rate else 1.0)
+            securities_wealth += value_eur
+
+        # 2. Cash Wealth
+        cash_inventory = self._calculate_cash_inventory(transactions)
+        cash_wealth = 0.0
+        for (
+            _,
+            currency,
+        ), balance in cash_inventory.items():
+            fx_rate = self.market_resolver.get_fx(currency, valuation_ts)
+            value_eur = balance / (fx_rate if fx_rate else 1.0)
+            cash_wealth += value_eur
+
+        # 3. Invested Capital
+        invested_capital = self._calculate_invested_capital(transactions)
+
+        return {
+            "total_wealth": securities_wealth + cash_wealth,
+            "securities_wealth": securities_wealth,
+            "cash_wealth": cash_wealth,
+            "invested_capital": invested_capital,
+        }
+
+    def _get_transactions_up_to(self, snapshot_date: date) -> list[Transaction]:
+        """Fetch all transactions from the database up to and including a given date."""
+        return db_access.get_transactions(conn=self.conn, end_date=snapshot_date)
+
+    def _calculate_security_inventory(
+        self, transactions: list[Transaction]
+    ) -> dict[str, float]:
+        """Calculate the quantity of each security from a list of transactions."""
+        inventory = defaultdict(float)
+        share_signs = {
+            TransactionType.BUY: 1,
+            TransactionType.INBOUND_DELIVERY: 1,
+            TransactionType.SELL: -1,
+            TransactionType.OUTBOUND_DELIVERY: -1,
+        }
+
+        for tx in transactions:
+            if tx.security and tx.type in share_signs and tx.shares is not None:
+                inventory[tx.security] += tx.shares / 1e8 * share_signs.get(tx.type, 0)
+
+        return {sec: qty for sec, qty in inventory.items() if abs(qty) > _SHARE_EPSILON}
+
+    def _calculate_cash_inventory(
+        self, transactions: list[Transaction]
+    ) -> dict[tuple[str, str], float]:
+        """Calculate the balance of each cash account from a list of transactions."""
+        inventory = defaultdict(float)
+        cash_signs = {
+            TransactionType.SELL: 1,
+            TransactionType.DEPOSIT: 1,
+            TransactionType.DIVIDEND: 1,
+            TransactionType.INTEREST: 1,
+            TransactionType.TAX_REFUND: 1,
+            TransactionType.FEE_REFUND: 1,
+            TransactionType.BUY: -1,
+            TransactionType.REMOVAL: -1,
+            TransactionType.INTEREST_CHARGE: -1,
+            TransactionType.TAX: -1,
+            TransactionType.FEE: -1,
+        }
+
+        for tx in transactions:
+            if tx.account and tx.type in cash_signs and tx.amount is not None:
+                inventory[(tx.account, tx.currency_code)] += (
+                    tx.amount / 100.0 * cash_signs.get(tx.type, 0)
+                )
+
+            if tx.type == TransactionType.CASH_TRANSFER:
+                if tx.account and tx.amount is not None:
+                    inventory[(tx.account, tx.currency_code)] -= tx.amount / 100.0
+                if tx.other_account and tx.amount is not None:
+                    inventory[(tx.other_account, tx.currency_code)] += tx.amount / 100.0
+
+        return {acc: bal for acc, bal in inventory.items() if abs(bal) > _SHARE_EPSILON}
+
+    def _calculate_invested_capital(
+        self,
+        transactions: list[Transaction],
+    ) -> float:
+        """Calculate the total invested capital from external flows."""
+        invested_capital = 0.0
+        flow_types = {
+            TransactionType.DEPOSIT: 1,
+            TransactionType.REMOVAL: -1,
+            TransactionType.INBOUND_DELIVERY: 1,
+            TransactionType.OUTBOUND_DELIVERY: -1,
+        }
+
+        for tx in transactions:
+            if tx.type in flow_types:
+                sign = flow_types[tx.type]
+                value_eur = 0.0
+                if isinstance(tx.date, str):
+                    tx_ts = datetime.fromisoformat(tx.date).replace(tzinfo=UTC)
+                else:
+                    tx_ts = pd.Timestamp(tx.date).to_pydatetime()
+                    if tx_ts.tzinfo is None:
+                        tx_ts = tx_ts.replace(tzinfo=UTC)
+
+                if tx.security and tx.shares is not None:
+                    price = self.market_resolver.get_price(tx.security, tx_ts)
+                    currency = self.market_resolver.get_security_currency(tx.security)
+                    fx_rate = self.market_resolver.get_fx(currency, tx_ts)
+                    value_eur = (tx.shares / 1e8 * price) / (
+                        fx_rate if fx_rate else 1.0
+                    )
+                elif tx.amount is not None:
+                    fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_ts)
+                    value_eur = (tx.amount / 100.0) / (fx_rate if fx_rate else 1.0)
+
+                invested_capital += value_eur * sign
+
+        return invested_capital
 
     def load_data(self) -> None:
         """
@@ -108,7 +263,7 @@ class PerformanceEngine:
         "today" are up-to-date.
         """
         # transactions
-        query_txs = "SELECT uuid, type, date, account, other_account, security, shares, amount, currency_code FROM transactions ORDER BY date"  # noqa: E501
+        query_txs = "SELECT uuid, type, date, account, other_account, portfolio, other_portfolio, security, shares, amount, currency_code FROM transactions ORDER BY date"  # noqa: E501
         try:
             self._df_txs = pd.read_sql_query(query_txs, self.conn, parse_dates=["date"])
         except pd.errors.DatabaseError:
@@ -119,6 +274,8 @@ class PerformanceEngine:
                     "date",
                     "account",
                     "other_account",
+                    "portfolio",
+                    "other_portfolio",
                     "security",
                     "shares",
                     "amount",
@@ -209,7 +366,7 @@ class PerformanceEngine:
         balances = self._get_account_balances(start_ts)
         cash_wealth = 0.0
 
-        for (acc_id, curr), bal in balances.items():  # noqa: B007
+        for (_acc_id, curr), bal in balances.items():
             # Use basis_ts (T-1) for FX
             rate = self._get_fx(curr, basis_ts)
             val_eur = bal / (rate if rate else 1.0)
@@ -636,8 +793,13 @@ class PerformanceEngine:
         )
         df_txs_window = self._df_txs[window_mask]
 
+        valid_fields = {f.name for f in dataclasses.fields(Transaction)}
+        transactions = []
+        for row in df_txs_window.to_dict("records"):
+            clean_row = {k: v for k, v in row.items() if k in valid_fields}
+            transactions.append(Transaction(**clean_row))
         realized, unrealized = self._calculate_capital_gains(
-            df_txs_window,
+            transactions,
             start_date,
             end_date,
             initial_inventory=virtual_inventory,
@@ -785,8 +947,9 @@ class PerformanceEngine:
         )
 
         # 4. Capital Gains
+        transactions = [Transaction(**row) for row in df_augmented.to_dict("records")]
         realized_map, unrealized_map = self._calculate_capital_gains_detailed(
-            df_augmented,  # Use augmented DF
+            transactions,  # Use augmented DF
             start_date,
             end_date,
             initial_inventory=virtual_inventory,
@@ -1355,7 +1518,7 @@ class PerformanceEngine:
         for i in range(0, len(tx_uuids), chunk_size):
             chunk = tx_uuids[i : i + chunk_size]
             placeholders = ",".join("?" for _ in chunk)
-            query = f"SELECT transaction_uuid, type, amount FROM transaction_units WHERE transaction_uuid IN ({placeholders}) AND type IN (1, 2, 11, 13)"  # noqa: S608, E501
+            query = f"SELECT transaction_uuid, type, amount FROM transaction_units WHERE transaction_uuid IN ({placeholders}) AND type IN (1, 2, 11, 13)"  # noqa: E501, S608
             try:
                 rows = self.conn.execute(query, tuple(chunk)).fetchall()
                 for r in rows:
@@ -1372,20 +1535,20 @@ class PerformanceEngine:
 
     def _calculate_capital_gains(
         self,
-        df_txs: pd.DataFrame,
+        transactions: list[Transaction],
         start_date: date,
         end_date: date,
         initial_inventory: dict[str, deque[Lot]] | None = None,
         basis_ts: pd.Timestamp | None = None,
     ) -> tuple[float, float]:
         realized_map, unrealized_map = self._calculate_capital_gains_detailed(
-            df_txs, start_date, end_date, initial_inventory, basis_ts
+            transactions, start_date, end_date, initial_inventory, basis_ts
         )
         return sum(realized_map.values()), sum(unrealized_map.values())
 
     def _calculate_capital_gains_detailed(  # noqa: PLR0912
         self,
-        df_txs: pd.DataFrame,
+        transactions: list[Transaction],
         start_date: date,
         end_date: date,
         initial_inventory: dict[str, deque[Lot]] | None = None,
@@ -1403,98 +1566,72 @@ class PerformanceEngine:
         inventory: dict[str, deque[Lot]] = initial_inventory or {}
         realized_gains_map: dict[str, float] = {}
 
-        sec_types = [
-            TransactionType.BUY,
-            TransactionType.SELL,
-            TransactionType.INBOUND_DELIVERY,
-            TransactionType.OUTBOUND_DELIVERY,
-            TransactionType.SECURITY_TRANSFER,
-        ]
+        for tx in transactions:
+            sec_id = tx.security
+            if not sec_id or not tx.shares:
+                continue
 
-        # Pre-filter
-        txs = df_txs[df_txs["type"].isin(sec_types)]
+            if isinstance(tx.date, str):
+                tx_date = datetime.fromisoformat(tx.date).replace(tzinfo=UTC)
+            else:
+                tx_date = pd.Timestamp(tx.date).to_pydatetime()
+                if tx_date.tzinfo is None:
+                    tx_date = tx_date.replace(tzinfo=UTC)
+            shares_raw = tx.shares / 1e8
+            shares = abs(shares_raw)
 
-        if not txs.empty:
-            # Augment with FX Rates (Vectorized Optimization)
-            txs = self._augment_txs_with_market_data(txs)
-            # Ensure sorting by date after augmentation (merge_asof requires it, but result is sorted by date too)  # noqa: E501
-            # However, let's be safe as we need it sorted for FIFO replay
-            # merge_asof returns sorted if left is sorted.
+            is_inbound = tx.type in {
+                TransactionType.BUY,
+                TransactionType.INBOUND_DELIVERY,
+            } or (tx.type == TransactionType.SECURITY_TRANSFER and shares_raw > 0)
 
-            units_payload = self._load_transaction_units(txs["uuid"].tolist())
+            is_outbound = tx.type in {
+                TransactionType.SELL,
+                TransactionType.OUTBOUND_DELIVERY,
+            } or (tx.type == TransactionType.SECURITY_TRANSFER and shares_raw < 0)
 
-            for row in txs.itertuples():
-                sec_id = row.security
-                if not sec_id or row.shares_norm == 0:
-                    continue
-
-                # Ensure map entry exists
-                if sec_id not in realized_gains_map:
-                    realized_gains_map[sec_id] = 0.0
-
-                shares = abs(row.shares_norm)
-                tx_price = 0.0
-                fees = units_payload.get(row.uuid, {}).get("fees", 0)
-                taxes = units_payload.get(row.uuid, {}).get("taxes", 0)
-
-                if row.type in (
-                    TransactionType.SELL,
-                    TransactionType.OUTBOUND_DELIVERY,
-                ):
-                    # For sells, reconstitute gross proceeds from net amount
-                    # + fees/taxes
-                    gross_amt_cents = abs(row.amount) + fees + taxes
-                    tx_price = (gross_amt_cents / 100.0) / shares
-                elif row.type in (
-                    TransactionType.BUY,
-                    TransactionType.INBOUND_DELIVERY,
-                ):
-                    # For buys, cost basis is the total cash outflow (amount)
-                    # Deduct Fees/Taxes from Amount to get pure Cost Basis
-                    if shares > 0 and row.amount is not None and row.amount != 0:
-                        net_amt_cents = abs(row.amount) - fees - taxes
-                        tx_price = (net_amt_cents / 100.0) / shares
-                    else:  # Fallback for deliveries without amount
-                        tx_price = self._get_price(sec_id, row.date)
-                elif row.type == TransactionType.SECURITY_TRANSFER:
-                    # For transfers, assume price is based on market value at the time
-                    tx_price = self._get_price(sec_id, row.date)
-
-                # Use pre-calculated FX rate
-                tx_fx = row.fx_rate
-
-                if row.type in (
-                    TransactionType.BUY,
+            if is_inbound:
+                net_amount = abs(tx.amount - tx.fees - tx.taxes)
+                if net_amount < _ZERO_AMOUNT_EPSILON and tx.type in {
                     TransactionType.INBOUND_DELIVERY,
                     TransactionType.SECURITY_TRANSFER,
-                ):
-                    if sec_id not in inventory:
-                        inventory[sec_id] = deque()
-                    inventory[sec_id].append(
-                        Lot(
-                            date=row.date,
-                            shares=shares,
-                            price_native=tx_price,
-                            fx_rate=tx_fx,
-                        )
+                }:
+                    price_native = self.market_resolver.get_price(sec_id, tx_date)
+                else:
+                    price_native = (net_amount / 100.0) / shares if shares else 0.0
+                fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_date)
+
+                if sec_id not in inventory:
+                    inventory[sec_id] = deque()
+                inventory[sec_id].append(
+                    Lot(
+                        date=tx_date,
+                        shares=shares,
+                        price_native=price_native,
+                        fx_rate=fx_rate,
                     )
-                elif row.type in (
-                    TransactionType.SELL,
-                    TransactionType.OUTBOUND_DELIVERY,
-                ):
-                    if inventory.get(sec_id):
-                        gain = self._process_security_sale(
-                            inventory[sec_id],
-                            shares,
-                            tx_price,
-                            tx_fx,
-                            start_ts,
-                            basis_ts,
-                            sec_id,
-                            row.currency_code,
-                        )
-                        if row.date >= start_ts:
-                            realized_gains_map[sec_id] += gain
+                )
+
+            elif is_outbound:
+                gross_proceeds = abs(tx.amount + tx.fees + tx.taxes)
+                sale_price_native = (gross_proceeds / 100.0) / shares if shares else 0.0
+                sale_fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_date)
+                sale_price_eur = (
+                    sale_price_native / sale_fx_rate if sale_fx_rate else 0.0
+                )
+
+                if inventory.get(sec_id):
+                    gain = self._process_security_sale(
+                        inventory[sec_id],
+                        shares,
+                        sale_price_eur,
+                        start_ts,
+                        basis_ts,
+                        sec_id,
+                        tx.currency_code,
+                    )
+                    if tx_date >= start_ts:
+                        realized_gains_map[sec_id] += gain
 
         unrealized_gains_map = self._calculate_unrealized_security_gains_detailed(
             inventory, start_ts, basis_ts, end_ts
@@ -1656,8 +1793,7 @@ class PerformanceEngine:
         self,
         lots: deque[Lot],
         shares_sold: float,
-        sale_price: float,
-        sale_fx: float,
+        sale_price_eur: float,
         start_ts: pd.Timestamp,
         basis_ts: pd.Timestamp,
         sec_id: str,
@@ -1686,9 +1822,8 @@ class PerformanceEngine:
                 else self._get_fx(currency, basis_ts)
             )
 
-            sale_val_eur = sale_price / sale_fx if sale_fx else 0.0
             base_val_eur = base_price / base_fx if base_fx else 0.0
-            gain_accum += (sale_val_eur - base_val_eur) * consumed
+            gain_accum += (sale_price_eur - base_val_eur) * consumed
         return gain_accum
 
     def _calculate_unrealized_security_gains_detailed(

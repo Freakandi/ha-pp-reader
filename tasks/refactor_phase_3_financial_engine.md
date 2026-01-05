@@ -33,7 +33,7 @@ Implement the core mathematical verification engine ("The Chain") and the detail
 ## Detailed Steps
 
 ### Block 1: The "Chain" Logic (Period Performance)
-- [ ] **Step 1: Simplify PerformanceEngine Init & Snapshot**
+- [x] **Step 1: Simplify PerformanceEngine Init & Snapshot**
     *   Modify `PerformanceEngine.__init__` to accept `MarketResolver` and `sqlite3.Connection`.
     *   Implement `get_snapshot(date)`:
         *   Sum `transactions` (Date <= T) to get Shares/Cash inventory.
