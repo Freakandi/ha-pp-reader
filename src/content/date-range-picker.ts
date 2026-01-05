@@ -511,6 +511,34 @@ export class DateRangePicker {
         // Days Grid
         const grid = document.createElement('div');
         grid.className = 'drp-days-grid';
+
+        // PALETTE: Enable Arrow Key navigation
+        grid.addEventListener('keydown', (e) => {
+            const navKeys = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'];
+            if (!navKeys.includes(e.key)) return;
+            e.preventDefault();
+
+            const days = Array.from(grid.querySelectorAll<HTMLElement>('.drp-day:not(.empty)'));
+            const current = document.activeElement as HTMLElement;
+            const idx = days.indexOf(current);
+
+            // If nothing in this grid is focused, maybe focus the first day?
+            if (idx === -1) {
+                if (days.length > 0) days[0].focus();
+                return;
+            }
+
+            let nextIdx = idx;
+            if (e.key === 'ArrowLeft') nextIdx = idx - 1;
+            if (e.key === 'ArrowRight') nextIdx = idx + 1;
+            if (e.key === 'ArrowUp') nextIdx = idx - 7;
+            if (e.key === 'ArrowDown') nextIdx = idx + 7;
+
+            if (nextIdx >= 0 && nextIdx < days.length) {
+                days[nextIdx].focus();
+            }
+        });
+
         grid.setAttribute('role', 'listbox');
         grid.setAttribute('aria-multiselectable', 'true');
         grid.setAttribute('aria-label', 'Kalender');
