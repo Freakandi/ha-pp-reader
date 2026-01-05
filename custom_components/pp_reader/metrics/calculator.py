@@ -1750,6 +1750,88 @@ class PerformanceEngine:
 
         return unrealized_gains_map
 
+    def _calculate_eur_flows_vectorized(self, combined: pd.DataFrame) -> pd.Series:
+        """Calculate EUR value of flows efficiently without using apply."""
+        # 1. Handle explicit 'flow_eur' (from transfers logic)
+        # Note: We intentionally do NOT use the symmetric 'flow_eur' for FX gain
+        # calculations, as we need the actual value of each leg of the transfer.
+        # But if the column is present (from augmentation), and valid,
+        # does _get_val usage suggest we ignore it?
+        # The previous code's _get_val IGNORED flow_eur for standard calc,
+        # but 'calc_flow_val' (unused?) tried to use it.
+        # _get_val was the source of truth, so we match that logic:
+        # It calculates (Amount / FX) for everything.
+
+        if combined.empty:
+            return pd.Series(dtype=float)
+
+        # Ensure currency_code is filled
+        # Note: df["currency_code"] might be object type.
+        curr_codes = combined["currency_code"].fillna("EUR")
+        amounts = combined["amount"].fillna(0.0)
+        dates = combined["date"]
+
+        # 2. Vectorized FX Lookup
+        # We need rates for all non-EUR rows
+        # Since _get_fx is scalar, we can't fully vectorize without a helper.
+        # However, _augment_txs_with_market_data does this efficiently via map/loop.
+        # Or we can iterate just the needed rows.
+
+        # Optimization: Use zip for fast iteration
+        # This avoids the overhead of apply() and is faster than manual index shuffling
+
+        # Start with 1:1 EUR conversion
+        # We work with numpy arrays for speed where possible
+        final_vals_arr = (amounts.to_numpy() / 100.0)
+
+        mask_non_eur = (curr_codes != "EUR").to_numpy()
+
+        if mask_non_eur.any():
+            # Extract data for non-EUR rows using boolean indexing
+            ne_dates = dates.loc[mask_non_eur]
+            ne_currs = curr_codes.loc[mask_non_eur]
+            ne_amounts = final_vals_arr[mask_non_eur]
+
+            # Use lists for fast iteration (avoiding Series iteration overhead)
+            # This is the critical optimization over apply() or Series iteration
+            l_dates = ne_dates.tolist()
+            l_currs = ne_currs.tolist()
+
+            # Using zip is significantly faster than itertuples or apply
+            rates = []
+            # Track if rate was found/valid to handle 0.0 fallback correctly
+            # If rate is 0/None, result should be 0.0
+
+            # We use a secondary list or just 0.0 in rate?
+            # if r is 0/None -> result 0.
+            # 1.0 is WRONG.
+            # But we can't divide by 0.
+            # Strategy: Store rate. If valid, use it. If not, use special value or mask later?
+            # Easiest: Use 1.0 for division, but multiply by 0 if invalid.
+            # Or just calc value inside loop?
+            # But we want to use numpy division if possible.
+            # But "value inside loop" is what apply did essentially.
+            # Is division that expensive?
+            # If we iterate anyway, maybe just calculate value?
+            # "zip loop" + "calc value" avoids numpy allocation/overhead if loop is python anyway.
+            # Let's do that. It's safer and avoids the "mask later" complexity.
+
+            vals = []
+            for curr, d, amt in zip(l_currs, l_dates, ne_amounts, strict=False):
+                r = self._get_fx(curr, d)
+                if r:
+                    vals.append(amt / r)
+                else:
+                    vals.append(0.0)
+
+            new_vals = np.array(vals)
+
+            # Update the specific slots in the main array
+            # boolean indexing on numpy array allows direct assignment
+            final_vals_arr[mask_non_eur] = new_vals
+
+        return pd.Series(final_vals_arr, index=combined.index)
+
     def _calculate_fx_performance(
         self,
         df_txs: pd.DataFrame,
@@ -1818,29 +1900,6 @@ class PerformanceEngine:
         # Combine
         combined = pd.concat([standard, augmented_transfers], ignore_index=True)
 
-        # Now iterate Combined to sum Flows by Account
-        # We need Net Flow EUR.
-        # If 'flow_eur' exists (from transfers), use it.
-        # Else compute: amount_norm / rate_at_date.
-
-        def calc_flow_val(row: pd.Series) -> float:
-            if (
-                hasattr(row, "flow_eur")
-                and pd.notna(row.flow_eur)
-                and row.flow_eur != 0
-            ):
-                # We need to apply sign.
-                return float(row.flow_eur)
-
-            # Standard logic
-            r = self._get_fx(row.currency_code, row.date)
-            return (
-                (row.amount_norm if hasattr(row, "amount_norm") else row.amount / 100.0)
-                / r
-                if r
-                else 0.0
-            )
-
         # Apply signs
         # DEPOSIT = Inflow (+). REMOVAL = Outflow (-).
 
@@ -1866,34 +1925,11 @@ class PerformanceEngine:
 
         combined["sign"] = combined["type"].map(type_signs).fillna(0)
 
-        # Calculate EUR value for each row
-        # We can vectorizing lookup of rates
-        # But 'augment' did complex logic.
-        # We need to respect 'flow_eur' if present.
-
-        # Calculate EUR value for each row
-        # Scalar Logic:
-        # For Transfer rows, use "flow_eur". For others, use (Amount / Rate).
-
-        def _get_val(row: pd.Series) -> float:
-            # Standard Calculation
-            # NOTE: We intentionally do NOT use the symmetric 'flow_eur' for FX gain
-            # calculations, as we need the actual value of each leg of the transfer.
-            curr = getattr(row, "currency_code", "EUR")
-            amt_cents = getattr(row, "amount", 0.0)
-
-            if curr == "EUR":
-                return amt_cents / 100.0
-
-            rate = self._get_fx(curr, row["date"])
-            return (amt_cents / 100.0) / rate if rate else 0.0
-
+        # Optimized Vectorized Calculation
         if not combined.empty:
-            combined["final_val_eur"] = combined.apply(_get_val, axis=1)
+            combined["final_val_eur"] = self._calculate_eur_flows_vectorized(combined)
         else:
             combined["final_val_eur"] = 0.0
-
-        # This redundant block is removed as _get_val is now the single source of truth.
 
         combined["signed_flow_eur"] = combined["final_val_eur"] * combined["sign"]
 

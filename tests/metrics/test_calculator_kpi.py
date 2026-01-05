@@ -1,5 +1,6 @@
 import sqlite3
 from datetime import date
+from unittest.mock import MagicMock
 
 import pandas as pd
 
@@ -9,7 +10,7 @@ from custom_components.pp_reader.metrics.calculator import PerformanceEngine
 def test_twr_simple_growth():
     """Test TWR calculation with simple compounding growth."""
     conn = sqlite3.connect(":memory:")
-    engine = PerformanceEngine(conn)
+    engine = PerformanceEngine(conn, MagicMock())
 
     # Dates
     # Dates
@@ -40,7 +41,7 @@ def test_twr_simple_growth():
 def test_twr_with_cashflow():
     """Test TWR calculation with a deposit."""
     conn = sqlite3.connect(":memory:")
-    engine = PerformanceEngine(conn)
+    engine = PerformanceEngine(conn, MagicMock())
 
     # Day 1: Start 100 -> End 120 (Deposit 10, Growth 10)
     # Return = (120 - 10) / 100 = 1.10 (+10%)
@@ -64,7 +65,7 @@ def test_twr_with_cashflow():
 def test_irr_simple_annual():
     """Test IRR calculation for 1 year 10%."""
     conn = sqlite3.connect(":memory:")
-    engine = PerformanceEngine(conn)
+    engine = PerformanceEngine(conn, MagicMock())
 
     start_date = date(2023, 1, 1)
     end_date = date(2024, 1, 1)  # 365 days
@@ -92,7 +93,7 @@ def test_irr_simple_annual():
 def test_irr_with_midyear_deposit():
     """Test IRR with a deposit in the middle."""
     conn = sqlite3.connect(":memory:")
-    engine = PerformanceEngine(conn)
+    engine = PerformanceEngine(conn, MagicMock())
 
     # 100 Start
     # 6 Months later (182 days): Deposit 100

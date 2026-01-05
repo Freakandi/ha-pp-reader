@@ -2,6 +2,7 @@
 
 import sqlite3
 from datetime import date
+from unittest.mock import MagicMock
 
 from custom_components.pp_reader.metrics.calculator import PerformanceEngine
 
@@ -130,7 +131,24 @@ def test_calculate_period_breakdown():
 
     conn.commit()
 
-    engine = PerformanceEngine(conn)
+    # Mock Resolver
+    mock_res = MagicMock()
+    # Mock prices for FIFO logic
+    # SecA: Start 100, End 120. SecB: Start 50, End 60.
+    def get_price_side_effect(sec_id, d):
+        # Extremely simplified mock for test data
+        if sec_id == "secA":
+            return 120.0 if d.year == 2023 and d.month == 12 else 100.0
+        if sec_id == "secB":
+            return 60.0 if d.year == 2023 and d.month == 12 else 50.0
+        return 0.0
+
+    mock_res.get_price.side_effect = get_price_side_effect
+    mock_res.get_fx.return_value = 1.0 # EUR
+    mock_res.get_security_currency.return_value = "EUR"
+    mock_res.is_price_stale.return_value = False
+
+    engine = PerformanceEngine(conn, mock_res)
     engine.load_data()
 
     bd = engine.calculate_period_breakdown(date(2023, 1, 1), date(2023, 12, 31))

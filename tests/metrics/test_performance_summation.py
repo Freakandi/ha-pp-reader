@@ -3,6 +3,7 @@
 
 import sqlite3
 from datetime import date, timedelta
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -86,7 +87,28 @@ def test_summation_with_cash_flows_and_fx():
 
     conn.commit()
 
-    engine = PerformanceEngine(conn)
+    # Mock Resolver
+    mock_res = MagicMock()
+    mock_res.get_fx.return_value = 1.0 # default
+    mock_res.get_price.return_value = 100.0 # default
+    mock_res.get_security_currency.return_value = "EUR"
+    mock_res.is_price_stale.return_value = False
+
+    def get_fx_side_effect(curr, d):
+        # Extremely simplified mock for test data
+        # T0 (Start): 2023-01-01. 1 EUR = 1.0 USD.
+        # T1 (Div):   2023-01-15. 1 EUR = 1.0 USD.
+        # T2 (End):   2023-01-31. 1 EUR = 2.0 USD.
+        if curr == "EUR": return 1.0
+        if curr == "USD":
+            if d.year == 2023 and d.month == 1 and d.day >= 31:
+                return 2.0
+            return 1.0
+        return 1.0
+
+    mock_res.get_fx.side_effect = get_fx_side_effect
+
+    engine = PerformanceEngine(conn, mock_res)
     engine.load_data()
 
     # Dates
@@ -291,7 +313,24 @@ def test_summation_with_all_neutral_types():
     # Matches End Wealth (2100).
 
     conn.commit()
-    engine = PerformanceEngine(conn)
+
+    # Mock Resolver
+    mock_res_2 = MagicMock()
+    mock_res_2.get_fx.return_value = 1.0
+    mock_res_2.get_security_currency.return_value = "EUR"
+    mock_res_2.is_price_stale.return_value = False
+
+    def get_price_side_effect(sec_id, d):
+        # 2023-01-10: Price 100.00 EUR
+        # 2023-01-31: Price 120.00 EUR
+        if sec_id == "sec1":
+            if d.day >= 31: return 120.0
+            if d.day >= 10: return 100.0
+        return 100.0
+
+    mock_res_2.get_price.side_effect = get_price_side_effect
+
+    engine = PerformanceEngine(conn, mock_res_2)
     engine.load_data()
 
     start_date = date(2023, 1, 1)

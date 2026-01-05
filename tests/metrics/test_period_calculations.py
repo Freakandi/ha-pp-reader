@@ -1,5 +1,6 @@
 import datetime
 import sqlite3
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -175,7 +176,21 @@ def test_realized_gains_calculation_gross_not_double_counted(test_db):
     start_date = datetime.date(2025, 1, 2)
     end_date = datetime.date(2025, 1, 3)
 
-    engine = PerformanceEngine(sqlite3.connect(test_db))
+    mock_res = MagicMock()
+    mock_res.get_fx.return_value = 1.0
+    mock_res.get_security_currency.return_value = "EUR"
+    mock_res.is_price_stale.return_value = False
+
+    def get_price_side_effect(sec_id, d):
+        # 20250101: 105.0
+        # 20250102: 110.0
+        if sec_id == "sec1":
+            if d.day == 1: return 105.0
+            if d.day >= 2: return 110.0
+        return 100.0
+    mock_res.get_price.side_effect = get_price_side_effect
+
+    engine = PerformanceEngine(sqlite3.connect(test_db), mock_res)
     engine.load_data()
     results = engine.calculate_period_performance(start_date, end_date)
 
