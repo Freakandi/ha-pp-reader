@@ -5,7 +5,7 @@ from datetime import date
 
 import pytest
 
-from custom_components.pp_reader.backdating.engine_pandas import TransactionType
+from custom_components.pp_reader.const import TransactionType
 from custom_components.pp_reader.services.performance_calculator import (
     PerformanceCalculator,
 )

@@ -25,11 +25,11 @@ from custom_components.pp_reader.data.normalized_store import (
     SnapshotBundle,
     async_load_latest_snapshot_bundle,
 )
-from custom_components.pp_reader.metrics.breakdown import (  # noqa: TC001
+from custom_components.pp_reader.metrics.calculator import (
     BreakdownItem,
     PerformanceBreakdown,
+    PerformanceEngine,
 )
-from custom_components.pp_reader.metrics.calculator import PerformanceEngine
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
 

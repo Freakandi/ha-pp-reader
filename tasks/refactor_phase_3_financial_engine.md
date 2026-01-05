@@ -64,12 +64,12 @@ Implement the core mathematical verification engine ("The Chain") and the detail
     *   Return list of `RealizedTrade` objects.
 
 ### Block 3: History & Persistence
-- [ ] **Step 5: Database Schema Update**
+- [x] **Step 5: Database Schema Update**
     *   Modify `custom_components/pp_reader/data/db_schema.py`.
     *   Add `DAILY_WEALTH_SCHEMA` definition with columns: `date` (TEXT), `scope_uuid` (TEXT), `scope_type` (TEXT), `total_wealth_cents` (INTEGER), `total_invested_cents` (INTEGER).
     *   Ensure the schema version or creation logic includes this new table.
 
-- [ ] **Step 6: Implement Daily Wealth Rebuild**
+- [x] **Step 6: Implement Daily Wealth Rebuild**
     *   Create `metrics/history.py`.
     *   Implement `rebuild_daily_wealth(start_date)`:
         *   Vectorized Rebuild:
@@ -80,7 +80,7 @@ Implement the core mathematical verification engine ("The Chain") and the detail
         *   Write to `daily_wealth` table.
 
 ### Block 4: Cleanup & Testing
-- [ ] **Step 7: Remove Legacy Code**
+- [x] **Step 7: Remove Legacy Code**
     *   Delete `metrics/breakdown.py`.
     *   Delete `backdating/engine_pandas.py`.
     *   Remove obsolete methods from `PerformanceEngine` (`_prepare_market_data`, pivot logic).

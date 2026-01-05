@@ -789,6 +789,19 @@ ACCOUNT_SNAPSHOT_SCHEMA = [
     """,
 ]
 
+DAILY_WEALTH_SCHEMA = [
+    """
+    CREATE TABLE IF NOT EXISTS daily_wealth (
+        date TEXT NOT NULL,
+        scope_uuid TEXT NOT NULL,
+        scope_type TEXT NOT NULL,
+        total_wealth_cents INTEGER NOT NULL,
+        total_invested_cents INTEGER NOT NULL,
+        PRIMARY KEY (date, scope_uuid, scope_type)
+    );
+    """,
+]
+
 ALL_SCHEMAS = [
     *ACCOUNT_SCHEMA,
     *SECURITY_SCHEMA,
@@ -812,6 +825,7 @@ ALL_SCHEMAS = [
     *SECURITY_METRICS_SCHEMA,
     *PORTFOLIO_SNAPSHOT_SCHEMA,
     *ACCOUNT_SNAPSHOT_SCHEMA,
+    *DAILY_WEALTH_SCHEMA,
 ]
 
 # Performance Index für On-Demand Portfolio Aggregation:
