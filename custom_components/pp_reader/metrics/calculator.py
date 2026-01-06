@@ -64,6 +64,13 @@ class PerformanceMetrics:
     twr: float = 0.0
     irr: float = 0.0
 
+    # UI Waterfall components
+    dividends: float = 0.0
+    fees: float = 0.0
+    taxes: float = 0.0
+    interest: float = 0.0
+    net_transfers: float = 0.0
+
 
 @dataclass
 class BreakdownItem:
@@ -671,6 +678,7 @@ class PerformanceEngine:
 
         transactions_in_period = [Transaction(**row) for row in filtered_txs_dict]
         net_flows = self._calculate_invested_capital(transactions_in_period)
+        metrics.net_transfers = net_flows
 
         # 3. Calculate Performance Components
         # a. Capital Gains (Realized and Unrealized)
@@ -715,12 +723,50 @@ class PerformanceEngine:
         interest = df_augmented[df_augmented["type"] == TransactionType.INTEREST][
             "amount_eur"
         ].sum()
-        fees = df_augmented[df_augmented["type"] == TransactionType.FEE][
+
+        # Calculate Fees and Taxes from both explicit transactions and transaction_units
+        fees_from_txs = df_augmented[df_augmented["type"] == TransactionType.FEE][
             "amount_eur"
-        ].sum()
-        taxes = df_augmented[df_augmented["type"] == TransactionType.TAX][
+        ].abs().sum()
+        taxes_from_txs = df_augmented[df_augmented["type"] == TransactionType.TAX][
             "amount_eur"
-        ].sum()
+        ].abs().sum()
+
+        fees_from_units = 0.0
+        taxes_from_units = 0.0
+        if not self._df_units.empty and not df_txs_window.empty:
+            df_units_in_window = self._df_units[
+                self._df_units["transaction_uuid"].isin(df_txs_window["uuid"])
+            ].copy()
+            if not df_units_in_window.empty:
+                df_units_dated = df_units_in_window.merge(
+                    df_txs_window[["uuid", "date"]],
+                    left_on="transaction_uuid",
+                    right_on="uuid",
+                    how="left",
+                )
+                df_units_augmented = self._augment_txs_with_market_data(df_units_dated)
+                df_units_augmented["amount_norm"] = df_units_augmented["amount"] / 100.0
+                df_units_augmented["amount_eur"] = np.where(
+                    df_units_augmented["fx_rate"] != 0,
+                    df_units_augmented["amount_norm"] / df_units_augmented["fx_rate"],
+                    0.0,
+                )
+                fees_from_units = df_units_augmented[
+                    df_units_augmented["type"] == UNIT_TYPE_FEE
+                ]["amount_eur"].abs().sum()
+                taxes_from_units = df_units_augmented[
+                    df_units_augmented["type"] == UNIT_TYPE_TAX
+                ]["amount_eur"].abs().sum()
+
+        fees = fees_from_txs + fees_from_units
+        taxes = taxes_from_txs + taxes_from_units
+
+        # Populate metrics object for UI
+        metrics.dividends = dividends
+        metrics.interest = interest
+        metrics.fees = fees
+        metrics.taxes = taxes
 
         sum_components = (
             metrics.realized_gains

@@ -20,12 +20,12 @@
 We must enrich the `PerformanceMetrics` object to support the UI's waterfall chart.
 
 ### 2.1 Update `PerformanceMetrics` Dataclass
-- [ ] **Update `PerformanceMetrics`** in `custom_components/pp_reader/metrics/calculator.py`:
+- [x] **Update `PerformanceMetrics`** in `custom_components/pp_reader/metrics/calculator.py`:
     - Add fields: `dividends`, `fees`, `taxes`, `interest` (floats, default 0.0).
     - Add field: `net_transfers` (float, default 0.0).
 
 ### 2.2 Update `calculate_period_performance`
-- [ ] **Populate new fields**:
+- [x] **Populate new fields**:
     - During the `invariant check` phase (where we already sum up components), explicitly assign these sums to the `metrics` object.
     - `metrics.dividends` = Sum of DIVIDEND transactions (augmented EUR).
     - `metrics.fees` = Sum of FEE transactions (augmented EUR).
