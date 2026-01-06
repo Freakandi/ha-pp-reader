@@ -172,11 +172,11 @@ class PerformanceEngine:
         end_ts_inclusive = valuation_ts + pd.Timedelta(days=1, microseconds=-1)
         df_txs_scoped = self._df_txs
         if portfolio_uuid:
-            # Filter transactions to the specific portfolio for invested capital calculation.
-            # This relies on the 'portfolio' field of a transaction being the authoritative link.
-            df_txs_scoped = df_txs_scoped[
-                df_txs_scoped["portfolio"] == portfolio_uuid
-            ]
+            # Filter transactions to the specific portfolio for invested capital
+            # calculation.
+            # This relies on the 'portfolio' field of a transaction being the
+            # authoritative link.
+            df_txs_scoped = df_txs_scoped[df_txs_scoped["portfolio"] == portfolio_uuid]
         df_txs_up_to = df_txs_scoped[df_txs_scoped["date"] <= end_ts_inclusive]
 
         valid_fields = {f.name for f in dataclasses.fields(Transaction)}
@@ -2305,12 +2305,13 @@ class PerformanceEngine:
                 is_transfer & (df_past["other_portfolio"] == portfolio_uuid), "sign"
             ] = 1
         else:
-            # Global view: replicate original behavior (treat as net inbound for the target portfolio)
+            # Global view: replicate original behavior (treat as net inbound for
+            # the target portfolio)
             df_past.loc[is_transfer, "sign"] = 1
 
-        df_past["delta_shares"] = (
-            df_past["shares_norm"].fillna(0.0) * df_past["sign"].fillna(0.0)
-        )
+        df_past["delta_shares"] = df_past["shares_norm"].fillna(0.0) * df_past[
+            "sign"
+        ].fillna(0.0)
 
         # Sum by security
         holdings = df_past.groupby("security")["delta_shares"].sum()
@@ -2331,9 +2332,11 @@ class PerformanceEngine:
 
         df_txs_scoped = self._df_txs
         if portfolio_uuid:
-            # For cash balances, a transaction is relevant if it originates from an account
-            # within the portfolio. Transfers into the portfolio are handled by creating
-            # an inbound leg, so we don't need to check other_portfolio here.
+            # For cash balances, a transaction is relevant if it originates from
+            # an account within the portfolio. Transfers into the portfolio are handled
+            # by creating an inbound leg, so we don't need to check other_portfolio
+            # here.
+
             accounts_in_portfolio = {
                 acc_uuid
                 for acc_uuid, port_uuid in self._account_portfolios.items()
@@ -2396,9 +2399,9 @@ class PerformanceEngine:
 
             df_past = pd.concat([df_past, transfers], ignore_index=True)
 
-        df_past["signed_amount"] = (
-            df_past["amount_norm"].fillna(0) * df_past["sign"].fillna(0)
-        )
+        df_past["signed_amount"] = df_past["amount_norm"].fillna(0) * df_past[
+            "sign"
+        ].fillna(0)
         balances = df_past.groupby(["account", "currency_code"])["signed_amount"].sum()
 
         if portfolio_uuid:
