@@ -870,6 +870,100 @@ class PerformanceEngine:
 
         return realized_trades
 
+    def get_fifo_active_lots(
+        self, scope_uuid: str | None = None
+    ) -> dict[str, list[Lot]]:
+        """
+        Calculate the active lots (cost basis inventory) using FIFO logic.
+
+        This method performs the same FIFO replay as `calculate_realized_performance`
+        but returns the final state of the inventory instead of the realized trades.
+
+        Args:
+            scope_uuid: Optional UUID of a portfolio or account to limit the scope.
+
+        Returns:
+            A dictionary where keys are security UUIDs and values are lists of
+            active `Lot` objects.
+
+        """
+        if self._df_txs.empty:
+            self.load_data()
+
+        df_txs = self._df_txs.copy()
+
+        # --- Scoping Logic (copied from calculate_realized_performance) ---
+        if scope_uuid:
+            # For a scoped view, a transfer out is a "sell", a transfer in is a "buy".
+            is_source = df_txs["portfolio"] == scope_uuid
+            is_target = (df_txs["type"] == TransactionType.SECURITY_TRANSFER) & (
+                df_txs["other_portfolio"] == scope_uuid
+            )
+            df_txs = df_txs[is_source | is_target].copy()
+
+            # Remap transfer types to buy/sell based on direction relative to scope
+            mask_transfer_out = (
+                df_txs["type"] == TransactionType.SECURITY_TRANSFER
+            ) & (df_txs["portfolio"] == scope_uuid)
+            df_txs.loc[mask_transfer_out, "type"] = TransactionType.OUTBOUND_DELIVERY
+
+            mask_transfer_in = (df_txs["type"] == TransactionType.SECURITY_TRANSFER) & (
+                df_txs["other_portfolio"] == scope_uuid
+            )
+            df_txs.loc[mask_transfer_in, "type"] = TransactionType.INBOUND_DELIVERY
+        else:
+            # For a global view, internal transfers do not realize gains. Ignore them.
+            df_txs = df_txs[df_txs["type"] != TransactionType.SECURITY_TRANSFER].copy()
+
+        units_payload = self._load_transaction_units(df_txs["uuid"].tolist())
+        inventory: dict[str, deque[Lot]] = {}
+        today = datetime.now(UTC)
+
+        df_txs = df_txs.sort_values("date")
+
+        for tx_row in df_txs.itertuples():
+            sec_id = tx_row.security
+            if not sec_id or not tx_row.shares or tx_row.shares == 0:
+                continue
+
+            tx_date = tx_row.date.to_pydatetime()
+            if tx_date.tzinfo is None:
+                tx_date = tx_date.replace(tzinfo=UTC)
+
+            shares = abs(tx_row.shares_norm)
+            tx_units = units_payload.get(tx_row.uuid, {})
+            fees = tx_units.get("fees", 0)
+            taxes = tx_units.get("taxes", 0)
+
+            # Inbound: BUY, INBOUND_DELIVERY
+            if tx_row.type in {TransactionType.BUY, TransactionType.INBOUND_DELIVERY}:
+                self._process_fifo_inbound(
+                    tx_row, sec_id, tx_date, shares, fees, taxes, inventory
+                )
+
+            # Outbound: SELL, OUTBOUND_DELIVERY
+            elif tx_row.type in {
+                TransactionType.SELL,
+                TransactionType.OUTBOUND_DELIVERY,
+            }:
+                # We don't need the realized trades, but the method calculates them.
+                # Pass a dummy list to satisfy the signature.
+                dummy_realized_trades: list[RealizedTrade] = []
+                self._process_fifo_outbound(
+                    tx_row,
+                    sec_id,
+                    tx_date,
+                    shares,
+                    fees,
+                    taxes,
+                    inventory,
+                    dummy_realized_trades,
+                    today,
+                )
+
+        # Convert deques to lists for the final output, filtering out empty lists.
+        return {sec_uuid: list(lots) for sec_uuid, lots in inventory.items() if lots}
+
     def _process_fifo_inbound(
         self,
         tx_row: Any,
