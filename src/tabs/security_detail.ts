@@ -979,7 +979,9 @@ function buildRangeSelector(activeRange: SecurityHistoryRangeKey): string {
         type="button"
         class="security-range-button${activeClass}"
         data-range="${escapeAttribute(rangeKey)}"
-        aria-pressed="${rangeKey === activeRange ? 'true' : 'false'}"
+        role="radio"
+        aria-checked="${rangeKey === activeRange ? 'true' : 'false'}"
+        tabindex="${rangeKey === activeRange ? '0' : '-1'}"
       >
         ${escapeHtml(rangeKey)}
       </button>
@@ -987,7 +989,7 @@ function buildRangeSelector(activeRange: SecurityHistoryRangeKey): string {
   });
 
   return `
-    <div class="security-range-selector" role="group" aria-label="Zeitraum">
+    <div class="security-range-selector" role="radiogroup" aria-label="Zeitraum">
       ${buttons.join('\n')}
     </div>
   `;
@@ -1827,7 +1829,8 @@ function updateRangeButtons(
     const rangeKey = button.dataset.range as SecurityHistoryRangeKey | undefined;
     const isActive = rangeKey === activeRange;
     button.classList.toggle('active', isActive);
-    button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+    button.setAttribute('aria-checked', isActive ? 'true' : 'false');
+    button.tabIndex = isActive ? 0 : -1;
     button.disabled = false;
     button.classList.remove('loading');
     if (rangeKey) {
@@ -2086,6 +2089,28 @@ function scheduleRangeSetup(options: ScheduleRangeSetupOptions): void {
         return;
       }
       void handleRangeClick(range as SecurityHistoryRangeKey);
+    });
+
+    rangeSelector.addEventListener('keydown', (event) => {
+      const target = event.target as HTMLElement;
+      if (target.getAttribute('role') !== 'radio') return;
+
+      const buttons = Array.from(rangeSelector.querySelectorAll<HTMLElement>('[role="radio"]'));
+      const index = buttons.indexOf(target);
+      let nextIndex = -1;
+
+      if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+        nextIndex = (index + 1) % buttons.length;
+      } else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
+        nextIndex = (index - 1 + buttons.length) % buttons.length;
+      }
+
+      if (nextIndex !== -1) {
+        event.preventDefault();
+        const nextButton = buttons[nextIndex];
+        nextButton.focus();
+        nextButton.click();
+      }
     });
   }, 0);
 }
