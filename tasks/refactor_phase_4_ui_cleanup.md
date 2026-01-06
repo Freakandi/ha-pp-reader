@@ -23,7 +23,7 @@ The `securities.py` module currently duplicates logic found in `PerformanceEngin
 - [x] **Update `get_snapshot`**:
     - Add optional argument: `portfolio_uuid: str | None = None`.
     - Pass this argument to `_get_holdings_at_date`, `_get_account_balances` (add filter there too), and `_calculate_invested_capital` (filter transactions first).
-- [ ] **Expose `get_fifo_active_lots`**:
+- [x] **Expose `get_fifo_active_lots`**:
     - Add method `get_fifo_active_lots(self, scope_uuid: str | None = None) -> dict[str, list[Lot]]`.
     - This must perform the *same* FIFO replay logic as `calculate_realized_performance`, but return the **final inventory state** (Active Lots) instead of the popped realized trades.
     - Used by `securities.py` to calculate "Lifetime Unrealized Gain" (Current Value - Sum(Lot Cost)).

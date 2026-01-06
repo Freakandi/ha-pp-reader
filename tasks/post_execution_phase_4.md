@@ -1,21 +1,20 @@
-# Assessment: PR #776 - Phase 4 Section 1.1
+# Assessment: PR #777 - Phase 4.1 Enhance Performance Engine
 
-## Execution Summary
-*   **Result:** Success
-*   **PR:** #776 (Session 2)
-*   **Scope:** Enhanced `PerformanceEngine` (`_get_holdings_at_date`, `get_snapshot`, `_get_account_balances`) to support `portfolio_uuid` filtering.
-*   **Task File:** `tasks/refactor_phase_4_ui_cleanup.md` updated correctly.
+## 1. Execution Summary
+- **Outcome:** Success
+- **Session ID:** `11045018980595388829`
+- **Focus:** `calculator.py` enhancements (`portfolio_uuid` filtering, `get_fifo_active_lots`).
+- **Files Changed:** `custom_components/pp_reader/metrics/calculator.py`, `tasks/refactor_phase_4_ui_cleanup.md`.
+- **Completeness:** 100% of tasks in Section 1.1 marked incomplete were completed and marked [x].
 
-## Quality Check
-*   **Architecture Validation:** Aligned with `refactor_calculations.md` (Phase 4). The logic correctly uses "Source vs Target" sign logic for Security Transfers (`-1` vs `+1`).
-*   **Inventory Access:** Logic correctly handles account filtering via `_account_portfolios` mapping.
-*   **Linting:** **FAILED**. 4 errors (`E501 Line too long`). These must be fixed in the next step.
+## 2. Quality Check
+- **Architecture:** Aligns with `refactor_calculations.md`. Correctly implemented method overloads and new exposure without breaking API contract for existing calls (defaults used).
+- **Breaking Changes:** None in this step (additions only).
+- **Linting:** Passed (`ruff check .`, `npm run lint:ts`).
 
-## Test Results
-*   **Status:** PASSED (3 passed, 3 skipped).
-*   **Coverage:** Confirmed validation of `test_get_snapshot` with default arguments (Backward Compatibility).
+## 3. Test Results
+- `pytest tests/metrics/test_performance_summation.py`: **Passed** (2 tests).
 
-## Recommendations
-1.  **Immediate Fix:** Fix the 4 linters errors (line length) in `metrics/calculator.py`.
-2.  **Next Step:** Proceed to Section 1.2 (Rewriting `securities.py`) which will consume this new filtering logic.
-3.  **Verification:** Add the new test cases (`test_securities_snapshot`) in Section 4 to explicitly verify the *filtering* behavior, as current tests only cover global scope.
+## 4. Recommendations
+- **Proceed to Phase 4.2:** The engine is now capable of supporting the "Pure Delegation" model for `securities.py`.
+- **Merge Strategy:** This PR is safe to merge as it is additive. However, since we are doing a sequential refactor, we can simply keep working on this branch or merge and pull. Given the workflow, we will likely continue execution on top of this.
