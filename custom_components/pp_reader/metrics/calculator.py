@@ -123,8 +123,11 @@ class PerformanceEngine:
         self._account_currencies: dict[str, str] = {}
         self._account_name_map: dict[str, str] = {}
         self._sec_name_map: dict[str, str] = {}
+        self._account_portfolios: dict[str, str] = {}
 
-    def get_snapshot(self, snapshot_date: date) -> dict[str, float]:
+    def get_snapshot(
+        self, snapshot_date: date, portfolio_uuid: str | None = None
+    ) -> dict[str, float]:
         """
         Calculate portfolio valuation (Wealth) at a specific date.
 
@@ -140,7 +143,9 @@ class PerformanceEngine:
         # _get_holdings_at_date is exclusive of the date passed, so we add a day
         # to get holdings at the end of snapshot_date.
         holdings_date = snapshot_date + pd.Timedelta(days=1)
-        security_inventory = self._get_holdings_at_date(holdings_date)
+        security_inventory = self._get_holdings_at_date(
+            holdings_date, portfolio_uuid=portfolio_uuid
+        )
         securities_wealth = 0.0
         for sec_uuid, quantity in security_inventory.items():
             price = self.market_resolver.get_price(sec_uuid, valuation_ts)
@@ -152,7 +157,9 @@ class PerformanceEngine:
         # 2. Cash Wealth
         # _get_account_balances is exclusive, so add a day.
         balances_ts = valuation_ts + pd.Timedelta(days=1)
-        cash_balances = self._get_account_balances(balances_ts)
+        cash_balances = self._get_account_balances(
+            balances_ts, portfolio_uuid=portfolio_uuid
+        )
         cash_wealth = 0.0
         if not cash_balances.empty:
             for (_acc_uuid, currency), balance in cash_balances.items():
@@ -163,7 +170,14 @@ class PerformanceEngine:
         # 3. Invested Capital
         # Create a transaction list from the dataframe up to the snapshot date.
         end_ts_inclusive = valuation_ts + pd.Timedelta(days=1, microseconds=-1)
-        df_txs_up_to = self._df_txs[self._df_txs["date"] <= end_ts_inclusive]
+        df_txs_scoped = self._df_txs
+        if portfolio_uuid:
+            # Filter transactions to the specific portfolio for invested capital
+            # calculation.
+            # This relies on the 'portfolio' field of a transaction being the
+            # authoritative link.
+            df_txs_scoped = df_txs_scoped[df_txs_scoped["portfolio"] == portfolio_uuid]
+        df_txs_up_to = df_txs_scoped[df_txs_scoped["date"] <= end_ts_inclusive]
 
         valid_fields = {f.name for f in dataclasses.fields(Transaction)}
         txs_dict = df_txs_up_to.to_dict("records")
@@ -341,13 +355,15 @@ class PerformanceEngine:
 
         # account currencies
         try:
-            query = "SELECT uuid, currency_code, name FROM accounts"
+            query = "SELECT uuid, currency_code, name, portfolio_uuid FROM accounts"
             rows = self.conn.execute(query).fetchall()
             self._account_currencies = {r[0]: (r[1] or "EUR") for r in rows}
             self._account_name_map = {r[0]: (r[2] or "Unknown Account") for r in rows}
+            self._account_portfolios = {r[0]: r[3] for r in rows if r[3]}
         except sqlite3.Error:
             self._account_currencies = {}
             self._account_name_map = {}
+            self._account_portfolios = {}
 
     def _calculate_portfolio_state_at_date(self, d: date) -> dict[str, float]:
         """
@@ -2246,16 +2262,26 @@ class PerformanceEngine:
 
         return float(rate)
 
-    def _get_holdings_at_date(self, d: date) -> dict[str, float]:
+    def _get_holdings_at_date(
+        self, d: date, portfolio_uuid: str | None = None
+    ) -> dict[str, float]:
         """Calculate security holdings at the start of a specific date (EOD of d-1)."""
         if self._df_txs.empty:
             return {}
 
         ts = pd.Timestamp(d, tz="UTC")
 
+        df_txs_scoped = self._df_txs
+        if portfolio_uuid:
+            is_source = df_txs_scoped["portfolio"] == portfolio_uuid
+            is_target_transfer = (
+                df_txs_scoped["type"] == TransactionType.SECURITY_TRANSFER
+            ) & (df_txs_scoped["other_portfolio"] == portfolio_uuid)
+            df_txs_scoped = df_txs_scoped[is_source | is_target_transfer]
+
         # Filter transactions strictly BEFORE the date
-        mask = (self._df_txs["date"] < ts) & (self._df_txs["security"].notna())
-        df_past = self._df_txs[mask].copy()
+        mask = (df_txs_scoped["date"] < ts) & (df_txs_scoped["security"].notna())
+        df_past = df_txs_scoped.loc[mask].copy()
 
         if df_past.empty:
             return {}
@@ -2263,19 +2289,29 @@ class PerformanceEngine:
         share_signs = {
             TransactionType.BUY: 1,
             TransactionType.INBOUND_DELIVERY: 1,
-            TransactionType.SECURITY_TRANSFER: 1,
             TransactionType.SELL: -1,
             TransactionType.OUTBOUND_DELIVERY: -1,
         }
+        df_past["sign"] = df_past["type"].map(share_signs)
 
-        # Calculate signed shares
-        # Note: We rely on the fact that `shares_norm` is usually positive in DB,
-        # but apply the direction map to handle Buy/Sell correctly.
-        # If shares_norm is negative (legacy), this might double-flip,
-        # but we align with engine_pandas.
+        # Handle transfers
+        is_transfer = df_past["type"] == TransactionType.SECURITY_TRANSFER
+        if portfolio_uuid:
+            # Scoped view: transfers are directional
+            df_past.loc[
+                is_transfer & (df_past["portfolio"] == portfolio_uuid), "sign"
+            ] = -1
+            df_past.loc[
+                is_transfer & (df_past["other_portfolio"] == portfolio_uuid), "sign"
+            ] = 1
+        else:
+            # Global view: replicate original behavior (treat as net inbound for
+            # the target portfolio)
+            df_past.loc[is_transfer, "sign"] = 1
 
-        df_past["sign"] = df_past["type"].map(share_signs).fillna(0)
-        df_past["delta_shares"] = df_past["shares_norm"].fillna(0.0) * df_past["sign"]
+        df_past["delta_shares"] = df_past["shares_norm"].fillna(0.0) * df_past[
+            "sign"
+        ].fillna(0.0)
 
         # Sum by security
         holdings = df_past.groupby("security")["delta_shares"].sum()
@@ -2283,7 +2319,9 @@ class PerformanceEngine:
         # Filter out zero or near-zero holdings and return dict
         return {k: v for k, v in holdings.items() if abs(v) > _SHARE_EPSILON}
 
-    def _get_account_balances(self, ts: pd.Timestamp) -> pd.Series:
+    def _get_account_balances(
+        self, ts: pd.Timestamp, portfolio_uuid: str | None = None
+    ) -> pd.Series:
         """
         Calculate account balances at a specific timestamp (EOD of previous day).
 
@@ -2292,23 +2330,28 @@ class PerformanceEngine:
         if self._df_txs.empty:
             return pd.Series(dtype=float)
 
-        # Filter transactions strictly BEFORE the ts (ts is Start of Day)
-        # We want End of Prev Day.
-        # Actually ts is usually Start Date 00:00:00.
-        # So transactions ON ts should NOT be included in "Starting Balance".
-        # Transactions < ts.
+        df_txs_scoped = self._df_txs
+        if portfolio_uuid:
+            # For cash balances, a transaction is relevant if it originates from
+            # an account within the portfolio. Transfers into the portfolio are handled
+            # by creating an inbound leg, so we don't need to check other_portfolio
+            # here.
 
-        mask = (self._df_txs["date"] < ts) & (self._df_txs["account"].notna())
-        df_past = self._df_txs[mask].copy()
+            accounts_in_portfolio = {
+                acc_uuid
+                for acc_uuid, port_uuid in self._account_portfolios.items()
+                if port_uuid == portfolio_uuid
+            }
+            df_txs_scoped = df_txs_scoped[
+                df_txs_scoped["account"].isin(accounts_in_portfolio)
+            ]
+
+        mask = (df_txs_scoped["date"] < ts) & (df_txs_scoped["account"].notna())
+        df_past = df_txs_scoped[mask].copy()
 
         if df_past.empty:
             return pd.Series(dtype=float)
 
-        # Calculate signs
-        # We can't vector-map _get_cash_flow_sign efficiently via apply row-by-row
-        # if performance matters, but map using a dict is fast.
-
-        # Build map
         type_signs = {
             TransactionType.SELL: 1,
             TransactionType.DEPOSIT: 1,
@@ -2321,45 +2364,21 @@ class PerformanceEngine:
             TransactionType.INTEREST_CHARGE: -1,
             TransactionType.TAX: -1,
             TransactionType.FEE: -1,
-            # In native df_txs, CASH_TRANSFER rows are Outflows from 'account'.
             TransactionType.CASH_TRANSFER: -1,
         }
-
         df_past["sign"] = df_past["type"].map(type_signs).fillna(0)
 
-        # We need to handle Transfers carefully if they appear once or twice.
-        # IF source/target logic is tricky, we rely on normalization elsewhere
-        # but here we approximate.
-        # In HA-PP: CASH_TRANSFER is typically filtered/normalized.
-        # If the DB has two rows (one for each side), great.
-
-        # Quick fix: Double the transfer rows for the target side.
         mask_transfers = df_past["type"] == TransactionType.CASH_TRANSFER
         if mask_transfers.any():
             transfers = df_past[mask_transfers].copy()
             transfers["account"] = transfers["other_account"]
-            transfers["sign"] = 1  # Deposit
+            transfers["sign"] = 1
 
-            # Currency for target?
-            # In 'transactions' table, 'currency_code' is for the 'amount'.
-            # If transfer is Cross-Currency, we need the Target Currency.
-            # We can look it up from account map.
-
-            # Vectorized lookup
             target_accs = transfers["account"]
-            # self._account_currencies is dict.
             mapped_curr = target_accs.map(self._account_currencies)
             transfers["currency_code"] = mapped_curr.fillna(transfers["currency_code"])
 
-            # Amount? If FX involved, we ideally look at transaction_units.
-            # But for speed in this helper, we might drift if we don't look at Units.
-            # Let's assume simplest case (Balance Sheet is robust-ish).
-            # Or assume we rely on 'augment' elsewhere.
-            # BUT this function is used for Start/End Balance. Accuracy matters.
-
-            # Try to fetch fx_amount from df_units if loaded
             if not self._df_units.empty:
-                # Merge
                 transfers = transfers.merge(
                     self._df_units[
                         ["transaction_uuid", "fx_amount", "fx_currency_code"]
@@ -2368,16 +2387,11 @@ class PerformanceEngine:
                     right_on="transaction_uuid",
                     how="left",
                 )
-
-                # If fx_amount present, use it
                 mask_fx = transfers["fx_amount"].notna()
                 if mask_fx.any():
-                    # amount_norm update
                     transfers.loc[mask_fx, "amount_norm"] = (
                         transfers.loc[mask_fx, "fx_amount"] / 100.0
                     )
-
-                # cleanup
                 transfers = transfers.drop(
                     columns=["transaction_uuid", "fx_amount", "fx_currency_code"],
                     errors="ignore",
@@ -2385,6 +2399,22 @@ class PerformanceEngine:
 
             df_past = pd.concat([df_past, transfers], ignore_index=True)
 
-        df_past["signed_amount"] = df_past["amount_norm"] * df_past["sign"]
+        df_past["signed_amount"] = df_past["amount_norm"].fillna(0) * df_past[
+            "sign"
+        ].fillna(0)
+        balances = df_past.groupby(["account", "currency_code"])["signed_amount"].sum()
 
-        return df_past.groupby(["account", "currency_code"])["signed_amount"].sum()
+        if portfolio_uuid:
+            accounts_in_portfolio = {
+                acc_uuid
+                for acc_uuid, port_uuid in self._account_portfolios.items()
+                if port_uuid == portfolio_uuid
+            }
+            if not balances.empty:
+                balances = balances[
+                    balances.index.get_level_values("account").isin(
+                        accounts_in_portfolio
+                    )
+                ]
+
+        return balances

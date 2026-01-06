@@ -17,10 +17,10 @@
 The `securities.py` module currently duplicates logic found in `PerformanceEngine`. It must be rewritten to delegate inventory and valuation logic to the engine/resolver. To achieve "Pure Delegation," the Engine must first be enhanced.
 
 ### 1.1 Enhance `PerformanceEngine` (`metrics/calculator.py`)
-- [ ] **Update `_get_holdings_at_date`**:
+- [x] **Update `_get_holdings_at_date`**:
     - Add optional argument: `portfolio_uuid: str | None = None`.
     - Filter `self._df_txs` by `portfolio == portfolio_uuid` (if provided) *before* calculating inventory.
-- [ ] **Update `get_snapshot`**:
+- [x] **Update `get_snapshot`**:
     - Add optional argument: `portfolio_uuid: str | None = None`.
     - Pass this argument to `_get_holdings_at_date`, `_get_account_balances` (add filter there too), and `_calculate_invested_capital` (filter transactions first).
 
