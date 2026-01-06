@@ -51,7 +51,7 @@ The `securities.py` module currently duplicates logic found in `PerformanceEngin
 ## 2. History & Charts Refactor (`metrics/history.py` & `websocket.py`)
 Ensure historical data is pre-calculated in `daily_wealth` and simply queried by the UI.
 
-- [ ] **Fix `metrics/history.py`**:
+- [x] **Fix `metrics/history.py`**:
     - Ensure `rebuild_daily_wealth` correctly populates `daily_wealth` (Delete old -> Insert new).
     - Ensure it uses `PerformanceEngine` correctly instantiated with `MarketResolver`.
 - [ ] **Update `websocket.py:ws_get_daily_wealth`**:

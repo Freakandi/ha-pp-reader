@@ -253,7 +253,12 @@ class PerformanceEngine:
         self,
         transactions: list[Transaction],
     ) -> float:
-        """Calculate the total invested capital from external flows."""
+        """
+        Calculate the total invested capital from external flows.
+
+        This method correctly "grosses up" flows by including associated fees and
+        taxes from transaction_units to reflect the true external capital movement.
+        """
         invested_capital = 0.0
         flow_types = {
             TransactionType.DEPOSIT: 1,
@@ -262,29 +267,55 @@ class PerformanceEngine:
             TransactionType.OUTBOUND_DELIVERY: -1,
         }
 
-        for tx in transactions:
-            if tx.type in flow_types:
-                sign = flow_types[tx.type]
-                value_eur = 0.0
-                if isinstance(tx.date, str):
-                    tx_ts = datetime.fromisoformat(tx.date).replace(tzinfo=UTC)
-                else:
-                    tx_ts = pd.Timestamp(tx.date).to_pydatetime()
-                    if tx_ts.tzinfo is None:
-                        tx_ts = tx_ts.replace(tzinfo=UTC)
+        flow_txs = [tx for tx in transactions if tx.type in flow_types]
+        if not flow_txs:
+            return 0.0
 
-                if tx.security and tx.shares is not None:
-                    price = self.market_resolver.get_price(tx.security, tx_ts)
-                    currency = self.market_resolver.get_security_currency(tx.security)
-                    fx_rate = self.market_resolver.get_fx(currency, tx_ts)
-                    value_eur = (tx.shares / 1e8 * price) / (
-                        fx_rate if fx_rate else 1.0
-                    )
-                elif tx.amount is not None:
-                    fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_ts)
-                    value_eur = (tx.amount / 100.0) / (fx_rate if fx_rate else 1.0)
+        # Pre-calculate EUR value of all fee/tax units associated with these flows
+        flow_tx_uuids = [tx.uuid for tx in flow_txs]
+        df_flow_units = self._df_units[
+            self._df_units["transaction_uuid"].isin(flow_tx_uuids)
+        ]
+        df_flow_units = df_flow_units[
+            df_flow_units["type"].isin([UNIT_TYPE_FEE, UNIT_TYPE_TAX])
+        ]
 
-                invested_capital += value_eur * sign
+        unit_sums_eur = defaultdict(float)
+        if not df_flow_units.empty:
+            tx_date_map = {tx.uuid: tx.date for tx in flow_txs}
+            for unit_row in df_flow_units.itertuples():
+                tx_uuid = unit_row.transaction_uuid
+                tx_date = tx_date_map.get(tx_uuid)
+                if tx_date:
+                    rate = self.market_resolver.get_fx(unit_row.currency_code, tx_date)
+                    unit_val_eur = (unit_row.amount / 100.0) / (rate if rate else 1.0)
+                    unit_sums_eur[tx_uuid] += unit_val_eur
+
+        for tx in flow_txs:
+            sign = flow_types[tx.type]
+            value_eur = 0.0
+
+            if isinstance(tx.date, str):
+                tx_ts = datetime.fromisoformat(tx.date).replace(tzinfo=UTC)
+            else:
+                tx_ts = pd.Timestamp(tx.date).to_pydatetime()
+                if tx_ts.tzinfo is None:
+                    tx_ts = tx_ts.replace(tzinfo=UTC)
+
+            if tx.security and tx.shares is not None:
+                price = self.market_resolver.get_price(tx.security, tx_ts)
+                currency = self.market_resolver.get_security_currency(tx.security)
+                fx_rate = self.market_resolver.get_fx(currency, tx_ts)
+                value_eur = (abs(tx.shares) / 1e8 * price) / (
+                    fx_rate if fx_rate else 1.0
+                )
+            elif tx.amount is not None:
+                fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_ts)
+                value_eur = (abs(tx.amount) / 100.0) / (fx_rate if fx_rate else 1.0)
+
+            # Gross up the value with associated fees/taxes
+            total_value_eur = value_eur + unit_sums_eur.get(tx.uuid, 0.0)
+            invested_capital += total_value_eur * sign
 
         return invested_capital
 
