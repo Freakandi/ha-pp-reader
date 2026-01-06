@@ -52,17 +52,17 @@ The `securities.py` module currently duplicates logic found in `PerformanceEngin
 **Goal:** Stop the "Fat Payload" pattern. The `daily_wealth` table and API should only deliver Wealth + Invested Capital. All performance metrics must involve the server-side aggregation engine.
 
 ### 2.1 Refactor Frontend Types (`src/data/api.ts`)
-- [ ] **Update `DailyWealthRecord` interface**:
+- [x] **Update `DailyWealthRecord` interface**:
     - **Remove** all breakdown fields: `dividends_eur`, `fees_eur`, `taxes_eur`, `interest_eur`, `realized_gains_eur`, `unrealized_gains_eur`, `performance_neutral_movements`.
     - **Keep**: `date`, `total_wealth_eur`, `invested_capital_eur`, `fx_coverage_ratio`, `price_coverage_ratio`, `stale_price`, `provenance`.
 - [ ] **Update `DailyWealthResponse`**:
     - Ensure `metrics` field conforms to `PerformanceMetrics` (already defined), but enforce its usage.
 
 ### 2.2 Refactor Frontend Logic (`src/tabs/time_series.ts`)
-- [ ] **Update `derivePerformance` function**:
+- [x] **Update `derivePerformance` function**:
     - **DELETE** the "Legacy Client-Side Calculation" branch (the `else` block where it tries to sum `dividends_eur` etc. from the daily records).
     - **Logic Change:** If `responseMetrics` is missing (i.e. user didn't request a performance period, or initial load), return `null` or a minimal object containing only `startValue`, `endValue`, and `delta`. Do NOT attempt to show breakdown rows.
-- [ ] **Update `renderMetrics`**:
+- [x] **Update `renderMetrics`**:
     - Handle the `null` return from `derivePerformance` gracefully (e.g., show "Select a period to view performance details" or just hide the breakdown section).
 
 ## 3. History & Charts Refactor (`metrics/history.py` & `websocket.py`)

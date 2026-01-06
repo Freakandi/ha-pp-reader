@@ -29,15 +29,7 @@ type PerformanceRowKey =
   | 'marketGain'
   | 'realizedGains'
   | 'unrealizedGains'
-  | 'unrealizedPriceGains'
   | 'fxGains'
-  | 'dividends'
-  | 'interest'
-  | 'ertraege'
-  | 'fees'
-  | 'taxes'
-  | 'netTransfers'
-  | 'neutral'
   | 'twr'
   | 'irr';
 
@@ -142,15 +134,6 @@ function formatCurrency(value: number): string {
   return `${formatNumber(value)}&nbsp;€`;
 }
 
-function sumField(records: DailyWealthRecord[], key: keyof DailyWealthRecord): number {
-  return records.reduce((sum, record) => {
-    const value = record[key];
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return sum + value;
-    }
-    return sum;
-  }, 0);
-}
 
 function setStatus(card: HTMLElement, status: DailyWealthState['status'], message = ''): void {
   const statusEl = card.querySelector<HTMLElement>('#analyse-status');
@@ -216,9 +199,14 @@ function renderMetrics(
   }
 
   const bd = derivePerformance(records, metrics);
-  if (!bd) return;
-
-  // const rows removed - direct usage via mkRow
+  if (!bd) {
+    container.innerHTML = `
+      <div class="metrics-empty">
+        Wähle einen Zeitraum, um die Performance-Details zu sehen.
+      </div>
+    `;
+    return;
+  }
 
 
   // Let's stick to the requested layout: clear structure.
@@ -251,12 +239,7 @@ function renderMetrics(
       ${mkRow('Kurserfolge (Gesamt)', bd.marketGain, 'sub-header')}
       ${mkRow('&nbsp;&nbsp;Realisiert', bd.realizedGains, 'indent', '', 'realized_gains')}
       ${mkRow('&nbsp;&nbsp;Nicht realisiert', bd.unrealizedGains, 'indent', '', 'unrealized_gains')}
-      ${mkRow('Dividenden', bd.dividends, '', '', 'dividends')}
-      ${mkRow('Zinsen', bd.interest, '', '', 'interest')}
-      ${mkRow('Gebühren', bd.fees, '', '', 'fees')}
-      ${mkRow('Steuern', bd.taxes, '', '', 'taxes')}
-      ${mkRow('FX-Veränderung', bd.fxGains)}
-      ${mkRow('Performanceneutrale Bew.', bd.neutral + bd.netTransfers)}
+      ${mkRow('FX-Veränderung (Cash)', bd.fxGains)}
       ${mkRow('Endwert', bd.endValue, 'highlight', 'perf-endValue')}
 
       <h3>Rendite (Zeitraum)</h3>
@@ -655,7 +638,7 @@ function renderWealthChart(chartCard: HTMLElement, data: DailyWealthResponse): v
  * Subsequent records are treated as the activity within the selected period.
  */
 function derivePerformance(records: DailyWealthRecord[], responseMetrics?: DailyWealthResponse['metrics']): PerformanceBreakdown | null {
-  if (records.length < 1) {
+  if (records.length < 1 || !responseMetrics) {
     return null;
   }
 
@@ -664,81 +647,28 @@ function derivePerformance(records: DailyWealthRecord[], responseMetrics?: Daily
   const baseline = records[0];
   const startValue = baseline.total_wealth_eur;
 
-  // If we only have one record, it means start-1 was requested but we only got one day.
-  // Or the range was just one day and we have no baseline.
-  // In this case, we have to treat startValue as 0 or the first record's value.
-  const periodRecords = records.length > 1 ? records.slice(1) : records;
   const latest = records[records.length - 1];
   const endValue = latest.total_wealth_eur;
 
-  // Period Cashflows
-  const dividends = sumField(periodRecords, 'dividends_eur');
-  const interest = sumField(periodRecords, 'interest_eur');
-  const ertraege = dividends + interest;
-  const fees = -Math.abs(sumField(periodRecords, 'fees_eur'));
-  const taxes = -Math.abs(sumField(periodRecords, 'taxes_eur'));
-  const netTransfers = sumField(periodRecords, 'inbound_transfers_eur') - sumField(periodRecords, 'outbound_transfers_eur');
-  const neutral = sumField(periodRecords, 'performance_neutral_movements');
-
-  // Total Delta = E - A
-  const delta = endValue - startValue;
-  // Total Performance = Delta - Neutral Capital Movements (Transfers + Deliveries)
-  const totalPerformance = delta - (netTransfers + neutral);
-
-  let realizedGains: number;
-  let unrealizedGains: number;
-  let fxGains: number;
-  let twr = 0;
-  let irr = 0;
-
-  if (responseMetrics) {
-    // Phase C: Use Server-Side Metrics as Source of Truth
-    realizedGains = responseMetrics.realized_gains;
-    unrealizedGains = responseMetrics.unrealized_gains;
-    fxGains = responseMetrics.fx_gains_cash;
-    twr = responseMetrics.twr ?? 0;
-    irr = responseMetrics.irr ?? 0;
-  } else {
-    // Legacy Client-Side Calculation
-    realizedGains = sumField(periodRecords, 'realized_gains_eur');
-
-    // Unrealized Gains during Period (Mark-to-Market)
-    const valEnd = latest.unrealized_gains_eur;
-    const valStart = records.length > 1 ? baseline.unrealized_gains_eur : 0;
-    const uEnd = valEnd ?? 0;
-    const uStart = valStart ?? 0;
-    unrealizedGains = uEnd - uStart;
-
-    // Kurserfolge (Gesamt) = Realized + Period Unrealized Change (both include FX)
-    const marketGainCalc = realizedGains + unrealizedGains;
-
-    // FX-Veränderung = Residual balance
-    fxGains = totalPerformance - marketGainCalc - ertraege - fees - taxes;
-  }
+  // Phase C: Use Server-Side Metrics as Source of Truth
+  const realizedGains = responseMetrics.realized_gains;
+  const unrealizedGains = responseMetrics.unrealized_gains;
+  const fxGains = responseMetrics.fx_gains_cash;
+  const twr = responseMetrics.twr ?? 0;
+  const irr = responseMetrics.irr ?? 0;
 
   // Market Gain is always Realized + Unrealized (Total Security Performance)
   const marketGain = realizedGains + unrealizedGains;
 
-  // For display: also track price-only component (Client-side approximation only for now)
-  const uPriceEnd = latest.unrealized_price_gains_eur ?? 0;
-  const uPriceStart = records.length > 1 ? baseline.unrealized_price_gains_eur ?? 0 : 0;
-  const unrealizedPriceGains = uPriceEnd - uPriceStart;
-
+  // The other fields are no longer available on the client.
+  // `ertraege` etc. are removed from `PerformanceBreakdown`
   return {
     startValue,
     endValue,
     marketGain,
     realizedGains,
     unrealizedGains,
-    unrealizedPriceGains,
     fxGains,
-    dividends,
-    interest,
-    ertraege,
-    fees,
-    taxes,
-    netTransfers,
-    neutral,
     twr,
     irr,
   };
