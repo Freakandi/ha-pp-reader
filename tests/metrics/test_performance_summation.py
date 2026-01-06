@@ -377,12 +377,12 @@ def test_summation_with_all_neutral_types():
         ("t2", 2, 200, "EUR", None, None),
     )  # Fee 2.00
 
-    # 3. Security Transfer (Inbound)
+    # 3. Security Transfer (Inbound) -> Use INBOUND_DELIVERY (Type 2) for external injection
     conn.execute(
         "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
             "t3",
-            4,
+            2,  # INBOUND_DELIVERY
             "2023-01-10T10:00:00",
             None,
             None,
@@ -394,6 +394,26 @@ def test_summation_with_all_neutral_types():
             "EUR",
         ),
     )  # 10 shares.
+
+    # 4. Explicit Fee Transaction (to affect Cash Balance)
+    # The unit on t2 creates the performance expense, but 'calculator.py' cash inventory
+    # ignores units. To mechanically lower the cash balance by 2 EUR, we need a FEE transaction.
+    conn.execute(
+        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        (
+            "t2_fee",
+            13,  # FEE
+            "2023-01-05T10:00:00",
+            "acc1",
+            None,
+            None,
+            None,
+            None,
+            0,
+            200,
+            "EUR",
+        ),
+    )
 
     conn.commit()
     market_resolver = MarketResolver(conn)
@@ -417,7 +437,12 @@ def test_summation_with_all_neutral_types():
         params=(end_date.isoformat(),),
     )
     end_wealth = df_daily.iloc[0]["total_wealth_cents"] / 100.0
-    assert end_wealth == pytest.approx(2100.0)
+
+    # Expected:
+    # Cash: 1000 (Dep) - 100 (Rem) - 2 (Fee) = 898.
+    # Sec: 10 * 120 = 1200.
+    # Total: 2098.
+    assert end_wealth == pytest.approx(2098.0)
 
     # Components
     row_start = pd.read_sql_query(
