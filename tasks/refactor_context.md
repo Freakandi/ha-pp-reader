@@ -89,3 +89,9 @@
 ### Session: Refactor Phase 4 Refinement (2026-01-06)
 *   **Correction:** `PerformanceEngine.get_snapshot` is insufficient for the "Overview Tab" because it does not provide granular FIFO cost basis for active lots.
 *   **Decision:** Updated Phase 4 Section 1.1 plan to expose `get_fifo_active_lots` from `PerformanceEngine`. This ensures we can calculate Lifetime Unrealized Gains correctly by summing the cost of remaining tax lots.
+
+### Session: Phase 4 UI/API Separation Refinement (2026-01-06)
+*   **Decision:** STRICT API Separation for `daily_wealth`. The DB table and API response must only contain `total_wealth` and `invested_capital`.
+*   **Correction:** Removed ALL daily flow breakdown columns (`dividends`, `fees`, `taxes` etc.) from `daily_wealth` table and response.
+*   **Logic:** Frontend MUST NOT perform client-side aggregation of daily flows. "Performance Breakdown" metrics must come strictly from the server-calculated `metrics` object.
+*   **Constraint:** Backend MUST NOT send `0.0` placeholder columns. The API contract must be clean. Frontend types will be refactored to match.

@@ -1,6 +1,6 @@
 # Refactor Phase 4: UI Data Cleanup & Consistency
 
-**Goal:** Ensure the Frontend receives data solely from the *invariant* backend machinery (`PerformanceEngine` and `MarketResolver`), eliminating ad-hoc SQL logic in `securities.py` and `websocket.py` and strictly persisting historical wealth to `daily_wealth`.
+**Goal:** Clean up the Frontend/Backend contract. Frontend must receive data solely from the *invariant* backend machinery (`PerformanceEngine` and `MarketResolver`). `daily_wealth` must be strictly "Wealth Only" (no performance breakdown). Frontend must be refactored to stop doing client-side performance math.
 
 **Context:**
 - **Master Plan:** `tasks/refactor_calculations.md` (Phase 4)
@@ -48,19 +48,37 @@ The `securities.py` module currently duplicates logic found in `PerformanceEngin
             - `Unrealized_Gain` = `Current_Value - Cost_Basis`.
     - **Output:** Construct `SecurityMetricRecord` objects.
 
-## 2. History & Charts Refactor (`metrics/history.py` & `websocket.py`)
+## 2. Frontend & API Contract Refactor (Strict Separation)
+**Goal:** Stop the "Fat Payload" pattern. The `daily_wealth` table and API should only deliver Wealth + Invested Capital. All performance metrics must involve the server-side aggregation engine.
+
+### 2.1 Refactor Frontend Types (`src/data/api.ts`)
+- [ ] **Update `DailyWealthRecord` interface**:
+    - **Remove** all breakdown fields: `dividends_eur`, `fees_eur`, `taxes_eur`, `interest_eur`, `realized_gains_eur`, `unrealized_gains_eur`, `performance_neutral_movements`.
+    - **Keep**: `date`, `total_wealth_eur`, `invested_capital_eur`, `fx_coverage_ratio`, `price_coverage_ratio`, `stale_price`, `provenance`.
+- [ ] **Update `DailyWealthResponse`**:
+    - Ensure `metrics` field conforms to `PerformanceMetrics` (already defined), but enforce its usage.
+
+### 2.2 Refactor Frontend Logic (`src/tabs/time_series.ts`)
+- [ ] **Update `derivePerformance` function**:
+    - **DELETE** the "Legacy Client-Side Calculation" branch (the `else` block where it tries to sum `dividends_eur` etc. from the daily records).
+    - **Logic Change:** If `responseMetrics` is missing (i.e. user didn't request a performance period, or initial load), return `null` or a minimal object containing only `startValue`, `endValue`, and `delta`. Do NOT attempt to show breakdown rows.
+- [ ] **Update `renderMetrics`**:
+    - Handle the `null` return from `derivePerformance` gracefully (e.g., show "Select a period to view performance details" or just hide the breakdown section).
+
+## 3. History & Charts Refactor (`metrics/history.py` & `websocket.py`)
 Ensure historical data is pre-calculated in `daily_wealth` and simply queried by the UI.
 
-- [x] **Fix `metrics/history.py`**:
+- [ ] **Fix `metrics/history.py`**:
     - Ensure `rebuild_daily_wealth` correctly populates `daily_wealth` (Delete old -> Insert new).
     - Ensure it uses `PerformanceEngine` correctly instantiated with `MarketResolver`.
 - [ ] **Update `websocket.py:ws_get_daily_wealth`**:
     - **Stop** instantiating `PerformanceEngine` for on-the-fly calculation.
     - **Start** querying `daily_wealth` table directly: `SELECT date, total_wealth_cents, total_invested_cents FROM daily_wealth WHERE ...`.
-    - Implement `_fetch_daily_wealth_from_db(conn, start, end)` helper.
+    - **Helper:** Implement `_fetch_daily_wealth_from_db(conn, start, end)`.
+    - **Strict API:** Do **NOT** inject placeholder columns (zeros) for the deleted breakdown fields. The Frontend types have been refactored to not expect them.
     - **Metrics Payload:** Only if `metrics_start` is requested, instantiate `PerformanceEngine` to calculate `calculate_period_performance` for the specific summary block. **Fix instantiation** to pass `MarketResolver`.
 
-## 3. Realized Trades Refactor (`websocket.py:ws_get_trades`)
+## 4. Realized Trades Refactor (`websocket.py:ws_get_trades`)
 The Trades tab currently shows a dummy summary. It needs to show granular, per-trade FIFO results.
 
 - [ ] **Update `ws_get_trades`**:
@@ -69,7 +87,7 @@ The Trades tab currently shows a dummy summary. It needs to show granular, per-t
     - Call `engine.calculate_realized_performance(scope_uuid=filter)`.
     - Map result `RealizedTrade` objects to the JSON format expected by the frontend (updating `_serialize_realized_performance` if necessary to match the dataclass fields).
 
-## 4. Test Plan
+## 5. Test Plan
 We need to verify the wiring.
 
 - [ ] **Create `tests/metrics/test_ui_consistency.py`**:
@@ -79,6 +97,7 @@ We need to verify the wiring.
 - [ ] **Run existing tests**:
     - `pytest tests/metrics/test_performance_summation.py` (Ensure engine still works).
     - `pytest tests/test_websocket.py` (Ensure no regressions in command signatures).
+    - `npm run typecheck` (Verify Frontend modifications).
 
 ## Complexity Expecation
 - **Complexity:** Medium

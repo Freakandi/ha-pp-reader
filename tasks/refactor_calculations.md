@@ -400,6 +400,9 @@ This phase ensures the Frontend receives data solely from the *invariant* backen
                 );
                 """
             ]
+            # NOTE: This table is STRICTLY for the Time Series Graph (Total Wealth).
+            # It does NOT store dividends, fees, taxes, or realized gains.
+            # Performance Breakdown is always calculated on-the-fly via the metrics endpoint.
             ```
         *   **Note:** We use `_cents` suffix and INTEGER type for precision, consistent with `amount_eur_cents` in transactions.
     *   **New Module `metrics/history.py`:**
