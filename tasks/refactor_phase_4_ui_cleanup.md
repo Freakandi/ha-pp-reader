@@ -29,10 +29,10 @@ The `securities.py` module currently duplicates logic found in `PerformanceEngin
     - Used by `securities.py` to calculate "Lifetime Unrealized Gain" (Current Value - Sum(Lot Cost)).
 
 ### 1.2 Rewrite `securities.py`
-- [ ] **Import Dependencies**:
+- [x] **Import Dependencies**:
     - `from custom_components.pp_reader.metrics.calculator import PerformanceEngine`
     - `from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver`
-- [ ] **Rewrite `_compute_security_metrics_sync`**:
+- [x] **Rewrite `_compute_security_metrics_sync`**:
     - Initialize `MarketResolver(conn)` and `PerformanceEngine(conn, market_resolver)`. Load data (`engine.load_data()`).
     - **Loop Portfolios**: Query all portfolios from DB.
     - **Per Portfolio**:

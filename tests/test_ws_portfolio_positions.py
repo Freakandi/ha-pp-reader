@@ -154,9 +154,12 @@ async def test_ws_get_portfolio_positions_normalises_currency(
         db_path_arg,
         *,
         include_positions: bool,
+        portfolio_uids: list[str] | None = None,
     ) -> NormalizationResult:
         assert Path(db_path_arg) == db_path
         assert include_positions is True
+        if portfolio_uids:
+            assert "portfolio-1" in portfolio_uids
         return _fake_normalization_result(include_positions=include_positions)
 
     monkeypatch.setattr(websocket_module, "async_normalize_snapshot", fake_snapshot)

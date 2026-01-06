@@ -22,6 +22,7 @@ DEFAULT_DB_SUBDIR = "pp_reader_data"
 CONFIG_ENTRY_VERSION = 3
 
 SHARE_EPSILON = 1e-9
+EIGHT_DECIMAL_SCALE = 10**8
 
 
 class TransactionType:
