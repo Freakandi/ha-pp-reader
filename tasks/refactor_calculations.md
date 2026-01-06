@@ -381,8 +381,10 @@ This phase ensures the Frontend receives data solely from the *invariant* backen
             *   Transactions: Query `transactions` (Enriched) for markers.
 
 2.  **Time Series Tab (History)**
-    *   **Goal:** Graph "Historical Wealth" (Value over Time) using a persisted `daily_wealth` table.
-    *   **Constraint:** The graph displays **Wealth Only** (not Performance, not Flows).
+    *   **Goal:** Graph "Historical Wealth" (Value over Time) using a persisted `daily_wealth` table AND Display "Performance Waterfall" (Start + Flows + Gains = End) for selected periods.
+    *   **Separation of Concerns:**
+        *   **Chart (Top):** Powered by `daily_wealth` table (Wealth Only, Pre-calculated).
+        *   **Waterfall (Bottom):** Powered by **On-Demand** `PerformanceMetrics` calculation via `metrics/calculator.py`.
     *   **Schema Creation (`daily_wealth`):**
         *   **Action:** Add `DAILY_WEALTH_SCHEMA` to `custom_components/pp_reader/data/db_schema.py`.
         *   **Definition:**
@@ -402,9 +404,21 @@ This phase ensures the Frontend receives data solely from the *invariant* backen
             ]
             # NOTE: This table is STRICTLY for the Time Series Graph (Total Wealth).
             # It does NOT store dividends, fees, taxes, or realized gains.
-            # Performance Breakdown is always calculated on-the-fly via the metrics endpoint.
             ```
         *   **Note:** We use `_cents` suffix and INTEGER type for precision, consistent with `amount_eur_cents` in transactions.
+    *   **Backend Support (New Contract):**
+        *   **`PerformanceMetrics` Upgrade:** The `PerformanceEngine` must return a fully populated `PerformanceMetrics` object supporting the following **Strict Waterfall Order**:
+            1.  **Start Wealth:** (Value @ T-1 EOD).
+            2.  **Unrealized Gains:** (Market Value Change of assets held). *Expandable*
+            3.  **Realized Gains:** (Gross profit from sales in period). *Expandable*
+            4.  **Dividends:** (Gross income). *Expandable*
+            5.  **Interest:** (Gross income/charge). *Expandable*
+            6.  **Taxes:** (Negative Flow). *Expandable*
+            7.  **Fees:** (Negative Flow). *Expandable*
+            8.  **FX Gains on Cash:** (Currency Fluctuation on Cash Balances). *Expandable*
+            9.  **Performance Neutral Movements:** (Net Transfers / Deposits / Removals).
+            10. **End Wealth:** (Value @ T EOD).
+        *   **On-Demand Endpoint:** The `ws_get_daily_wealth` endpoint will calculate this *only* if `metrics_start` is requested.
     *   **New Module `metrics/history.py`:**
         *   **Function:** `rebuild_daily_wealth(start_date: date, scopes: list[str])`
         *   **Logic:**
@@ -418,7 +432,6 @@ This phase ensures the Frontend receives data solely from the *invariant* backen
                 *   For Securities: `df.groupby(['date', 'security_uuid']).sum().cumsum()`.
                 *   For Cash: `df.groupby(['date', 'account_uuid', 'currency_code']).sum().cumsum()`.
             *   3. **Resample:** Resample to Daily frequency (ffill) *per group* to obtain continuous daily inventory.
-            *   3. Resample to Daily frequency (ffill).
             *   4. Iterate the *result* (much smaller loop) to apply `MarketResolver` prices for Valuation.
             *   *Rationale:* Reduces Complexity from O(T*N) to O(N + T).
     *   **Usage (Graph Generation):**
