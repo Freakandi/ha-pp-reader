@@ -402,7 +402,7 @@ def test_summation_with_all_neutral_types():
         "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
         (
             "t2_fee",
-            13, # FEE
+            13,  # FEE
             "2023-01-05T10:00:00",
             "acc1",
             None,
