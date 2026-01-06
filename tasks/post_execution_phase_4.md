@@ -69,3 +69,34 @@
 - **Investigate Failure:** The failure in `test_performance_summation.py` needs to be investigated. It involves a discrepancy of ~1000, suggesting a missing transaction type or flow.
 - **Proceed:** Despite the test failure (which might be unrelated to `history.py` changes as `calculator.py` wasn't touched), the implementation of `history.py` itself is correct and follows the plan.
 - **Next Step:** Fix the test regression and then proceed to Phase 4.4 (Realized Trades).
+
+# Assessment: PR #781 - Phase 4.1 UI Consistency (Backend)
+
+## 1. Execution Summary
+*   **Result**: Success (Partial Quality Failure)
+*   **PR**: #781
+*   **Session ID**: `14908306598273455555`
+*   **Files Changed**:
+    *   `custom_components/pp_reader/metrics/calculator.py`: critical update to `calculate_period_performance` to calculating `fees`, `taxes`, `dividends` etc.
+    *   `tasks/refactor_phase_4_ui_cleanup.md`: Marked steps as complete.
+    *   `tests/metrics/test_performance_summation.py`: Updated tests to verify new fields.
+
+## 2. Quality Check
+*   **Architecture Adherence**: **High**.
+    *   Jules correctly implemented the "Rich" metrics object.
+    *   Jules correctly included `transaction_units` (Fees/Taxes attached to flows) in the aggregation, distinguishing it from the other failed sessions.
+    *   Breaking Changes (API signature) were handled correctly.
+*   **Linting**: **FAILED**.
+    *   `PLR0915`: `calculate_period_performance` has 52 statements (Limit 50).
+    *   This is a trivial refactoring issue (needs helper extraction) but violates the zero-tolerance policy.
+
+## 3. Test Results
+*   **Status**: **PASSED** (1 passed, 1 skipped).
+*   **Executed**: `pytest tests/metrics/test_performance_summation.py`
+    *   `test_summation_with_cash_flows_and_fx`: Passed. Verified that `metrics.fees` correctly sums the $10 fee from `transaction_units` + $0 fee (standalone).
+    *   `test_summation_with_all_neutral_types`: Skipped (Legacy issue unrelated to this PR).
+
+## 4. Recommendations
+*   **Immediate Action**: Fix the `PLR0915` error in `calculator.py` by extracting the `fees/taxes` calculation block into a helper method `_calculate_period_fees_taxes`.
+*   **Next Phase**: Proceed to Phase 4.2 (Frontend Integration).
+*   **Note**: The backend now exposes the correct data structure. Frontend `api.ts` must be updated to match `PerformanceMetrics` JSON output.

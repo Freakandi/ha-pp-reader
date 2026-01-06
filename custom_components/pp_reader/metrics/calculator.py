@@ -640,6 +640,61 @@ class PerformanceEngine:
             )
         return virtual_inventory, start_ts, basis_ts
 
+    def _calculate_period_fees_taxes(
+        self, df_augmented: pd.DataFrame, df_txs_window: pd.DataFrame
+    ) -> tuple[float, float]:
+        """Calculate total fees and taxes for the period from explicit txs and units."""
+        # Calculate Fees and Taxes from both explicit transactions and transaction_units
+        fees_from_txs = (
+            df_augmented[df_augmented["type"] == TransactionType.FEE]["amount_eur"]
+            .abs()
+            .sum()
+        )
+        taxes_from_txs = (
+            df_augmented[df_augmented["type"] == TransactionType.TAX]["amount_eur"]
+            .abs()
+            .sum()
+        )
+
+        fees_from_units = 0.0
+        taxes_from_units = 0.0
+        if not self._df_units.empty and not df_txs_window.empty:
+            df_units_in_window = self._df_units[
+                self._df_units["transaction_uuid"].isin(df_txs_window["uuid"])
+            ].copy()
+            if not df_units_in_window.empty:
+                df_units_dated = df_units_in_window.merge(
+                    df_txs_window[["uuid", "date"]],
+                    left_on="transaction_uuid",
+                    right_on="uuid",
+                    how="left",
+                )
+                df_units_augmented = self._augment_txs_with_market_data(df_units_dated)
+                df_units_augmented["amount_norm"] = df_units_augmented["amount"] / 100.0
+                df_units_augmented["amount_eur"] = np.where(
+                    df_units_augmented["fx_rate"] != 0,
+                    df_units_augmented["amount_norm"] / df_units_augmented["fx_rate"],
+                    0.0,
+                )
+                fees_from_units = (
+                    df_units_augmented[df_units_augmented["type"] == UNIT_TYPE_FEE][
+                        "amount_eur"
+                    ]
+                    .abs()
+                    .sum()
+                )
+                taxes_from_units = (
+                    df_units_augmented[df_units_augmented["type"] == UNIT_TYPE_TAX][
+                        "amount_eur"
+                    ]
+                    .abs()
+                    .sum()
+                )
+
+        fees = fees_from_txs + fees_from_units
+        taxes = taxes_from_txs + taxes_from_units
+        return fees, taxes
+
     def calculate_period_performance(
         self, start_date: date, end_date: date
     ) -> PerformanceMetrics:
@@ -724,58 +779,23 @@ class PerformanceEngine:
             "amount_eur"
         ].sum()
 
-        # Calculate Fees and Taxes from both explicit transactions and transaction_units
-        fees_from_txs = df_augmented[df_augmented["type"] == TransactionType.FEE][
-            "amount_eur"
-        ].abs().sum()
-        taxes_from_txs = df_augmented[df_augmented["type"] == TransactionType.TAX][
-            "amount_eur"
-        ].abs().sum()
-
-        fees_from_units = 0.0
-        taxes_from_units = 0.0
-        if not self._df_units.empty and not df_txs_window.empty:
-            df_units_in_window = self._df_units[
-                self._df_units["transaction_uuid"].isin(df_txs_window["uuid"])
-            ].copy()
-            if not df_units_in_window.empty:
-                df_units_dated = df_units_in_window.merge(
-                    df_txs_window[["uuid", "date"]],
-                    left_on="transaction_uuid",
-                    right_on="uuid",
-                    how="left",
-                )
-                df_units_augmented = self._augment_txs_with_market_data(df_units_dated)
-                df_units_augmented["amount_norm"] = df_units_augmented["amount"] / 100.0
-                df_units_augmented["amount_eur"] = np.where(
-                    df_units_augmented["fx_rate"] != 0,
-                    df_units_augmented["amount_norm"] / df_units_augmented["fx_rate"],
-                    0.0,
-                )
-                fees_from_units = df_units_augmented[
-                    df_units_augmented["type"] == UNIT_TYPE_FEE
-                ]["amount_eur"].abs().sum()
-                taxes_from_units = df_units_augmented[
-                    df_units_augmented["type"] == UNIT_TYPE_TAX
-                ]["amount_eur"].abs().sum()
-
-        fees = fees_from_txs + fees_from_units
-        taxes = taxes_from_txs + taxes_from_units
+        # Calculate Fees and Taxes
+        metrics.fees, metrics.taxes = self._calculate_period_fees_taxes(
+            df_augmented, df_txs_window
+        )
 
         # Populate metrics object for UI
         metrics.dividends = dividends
         metrics.interest = interest
-        metrics.fees = fees
-        metrics.taxes = taxes
 
         sum_components = (
             metrics.realized_gains
             + metrics.unrealized_gains
             + metrics.fx_gains_cash
-            + dividends
-            + interest
-            - fees  # Fees are a negative contribution
-            - taxes  # Taxes are a negative contribution
+            + metrics.dividends
+            + metrics.interest
+            - metrics.fees  # Fees are a negative contribution
+            - metrics.taxes  # Taxes are a negative contribution
         )
 
         system_delta = metrics.absolute_performance
