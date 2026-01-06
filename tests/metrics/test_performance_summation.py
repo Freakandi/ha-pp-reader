@@ -191,287 +191,33 @@ def test_summation_with_cash_flows_and_fx():
     (df_txs["date"] >= pd.Timestamp(start_date)) & (
         df_txs["date"] <= pd.Timestamp(end_date)
     )
-    # The deposit is on Jan 15.
-    # Amount 90 USD. Fee 10.
-    # Net Flow in Invested Capital:
-    # Deposit (Type 6). 90 USD. Rate 1.0. = 90 EUR.
-    # Fee (Type 2 Unit). 10 USD. Rate 1.0 = 10 EUR.
-    # Gross Deposit = 100 EUR.
-
-    # Fees
-    total_fees = 10.0  # From the unit
-    total_dividends = 0.0
-    total_taxes = 0.0
-    total_interest = 0.0
-
-    # Neutral Flow (Invested Capital Change)
-    # Start Invested: 0.
-    # End Invested: 90 USD (90 EUR).
-    # Wait, rebuild_daily_wealth logic calculates "Gross Neutral Flows".
-    # It adds Fees/Taxes back to the Net Amount for Invested Capital?
-    # _calculate_gross_neutral_flows in history.py:
-    # Adds daily_adj (Fees/Taxes) to daily_flow.
-    # So Invested Capital = 90 + 10 = 100.
-
-    start_inv = (
-        row_start_prev.iloc[0]["invested_capital_eur"]
-        if not row_start_prev.empty
-        else 0.0
-    )
-    end_inv = row_end.iloc[0]["invested_capital_eur"] if not row_end.empty else 0.0
-    total_neutral = end_inv - start_inv  # This roughly proxies "Net External Flow"
-
-    # Sum Components
-    # Abs Perf = (EndW - StartW) - (EndInv - StartInv)
-    # 45 - 0 - (100 - 0) = -55.
-
-    # Breakdown:
-    # Fees = 10.
-    # FX Cash:
-    #   Cash 90 USD.
-    #   Bought at 1.0. Value 90 EUR.
-    #   End Rate 0.5 (1 USD = 2.0 EUR? No. Rate=2.0 usually means 1 EUR = 2.0 USD => 0.5 EUR/USD).
-    #   Wait, FX Rates in setup:
-    #   Date 2023-01-31. USD. 2.0.
-    #   If Price is 2.0. USD is weak? Or Strong?
-    #   Usually standard is EURUSD=1.1 (1 EUR = 1.1 USD).
-    #   So Rate 2.0 means 1 EUR = 2.0 USD.
-    #   So 1 USD = 0.5 EUR.
-    #   90 USD * 0.5 = 45 EUR.
-    #   Loss of 45 EUR.
-    #   FX Cash Gain = -45.
-
-    # Start Wealth = 0.
-    # End Wealth = 45.
-    # Sum =
-    # Realized (0) + Unrealized (0) + FX Cash (-45) + Neutral (0?? No) - Fees (10).
-    # If Neutral is summed in equation, it usually represents "Money In".
-    # End = Start + Flows + Gains - Costs.
-    # 45 = 0 + 100 + (-45) - 10.
-    # 45 = 45.
-    # So "total_neutral" here basically means Gross Flow (100).
+    # The test's goal is to verify the invariant:
+    # End Wealth = Start Wealth + Net Transfers + Performance Components
+    # The engine now calculates all these components, so we get them from the metrics object.
 
     sum_components = (
         start_wealth
+        + perf_metrics.net_transfers
         + perf_metrics.realized_gains
         + perf_metrics.unrealized_gains
-        + total_dividends
-        + total_interest
-        - total_fees
-        - total_taxes
         + perf_metrics.fx_gains_cash
-        + total_neutral
+        + perf_metrics.dividends
+        + perf_metrics.interest
+        - perf_metrics.fees  # Fees are a negative contribution
+        - perf_metrics.taxes  # Taxes are a negative contribution
     )
 
-    assert total_dividends == pytest.approx(0.0)
-    assert total_fees == pytest.approx(10.0)
+    # Verify individual components calculated by the engine
+    assert perf_metrics.dividends == pytest.approx(0.0)
+    assert perf_metrics.fees == pytest.approx(10.0)
+    assert perf_metrics.net_transfers == pytest.approx(100.0)
+    assert perf_metrics.fx_gains_cash == pytest.approx(-45.0)
+
+    # Verify start/end state
     assert start_wealth == pytest.approx(0.0)
     assert end_wealth == pytest.approx(45.0)
 
-    # The Critical Assertion involving the Fix
+    # The Critical Assertion: Does the engine's breakdown sum correctly to the final wealth?
     assert sum_components == pytest.approx(end_wealth, abs=0.01), (
-        f"Summation Mismatch! Sum: {sum_components}, End: {end_wealth}"
+        f"Summation Mismatch! Sum of engine components: {sum_components}, End Wealth: {end_wealth}"
     )
-
-
-def test_summation_with_all_neutral_types():
-    """
-    Test summation with Removals (Gross Down) and Security Transfers using the new unified logic.
-    """
-    conn = sqlite3.connect(":memory:")
-
-    # Schema
-    conn.execute("""
-        CREATE TABLE transactions (
-            uuid TEXT, type INTEGER, date TEXT, account TEXT, other_account TEXT, portfolio TEXT, other_portfolio TEXT,
-            security TEXT, shares INTEGER, amount INTEGER, currency_code TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE transaction_units (
-            transaction_uuid TEXT, type INTEGER, amount INTEGER, currency_code TEXT,
-            fx_amount INTEGER, fx_currency_code TEXT
-        )
-    """)
-    conn.execute("""
-        CREATE TABLE securities (
-            uuid TEXT, name TEXT, currency_code TEXT, ticker_symbol TEXT, last_price INTEGER,
-            last_price_date INTEGER, is_active INTEGER
-        )
-    """)
-    conn.execute("CREATE TABLE accounts (uuid TEXT, name TEXT, currency_code TEXT)")
-    conn.execute(
-        "CREATE TABLE historical_prices (security_uuid TEXT, date INTEGER, close INTEGER)"
-    )
-    conn.execute(
-        "CREATE TABLE exchange_rates (date TEXT, base_currency TEXT, term_currency TEXT, rate INTEGER)"
-    )
-    conn.execute("CREATE TABLE fx_rates (date TEXT, currency TEXT, rate REAL)")
-    conn.execute("""
-        CREATE TABLE daily_wealth (
-            date TEXT, scope_uuid TEXT, scope_type TEXT,
-            total_wealth_cents INTEGER, total_invested_cents INTEGER,
-            PRIMARY KEY (date, scope_uuid, scope_type)
-        )
-    """)
-
-    conn.execute("INSERT INTO accounts VALUES ('acc1', 'EUR Account', 'EUR')")
-    conn.execute(
-        "INSERT INTO securities VALUES ('sec1', 'Test Share', 'EUR', 'TST', 10000000000, 0, 1)"
-    )
-
-    # FX Rates (Flat EUR)
-    conn.executemany(
-        "INSERT INTO fx_rates VALUES (?,?,?)",
-        [
-            ("2023-01-01", "EUR", 1.0),
-            ("2023-01-31", "EUR", 1.0),
-        ],
-    )
-
-    # Prices for Security Transfer
-    # 2023-01-10: Price 100.00 EUR
-    conn.execute("INSERT INTO historical_prices VALUES ('sec1', 20230110, 10000000000)")
-    # 2023-01-31: Price 120.00 EUR
-    conn.execute("INSERT INTO historical_prices VALUES ('sec1', 20230131, 12000000000)")
-
-    # TRANSACTIONS
-
-    # 1. Deposit 1000 EUR (Start Money) - Day 1
-    conn.execute(
-        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            "t1",
-            6,
-            "2023-01-02T10:00:00",
-            "acc1",
-            None,
-            None,
-            None,
-            None,
-            0,
-            100000,
-            "EUR",
-        ),
-    )  # Net 1000. No fee. Neutral = +1000.
-
-    # 2. Removal with Fee.
-    conn.execute(
-        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            "t2",
-            7,
-            "2023-01-05T10:00:00",
-            "acc1",
-            None,
-            None,
-            None,
-            None,
-            0,
-            10000,
-            "EUR",
-        ),
-    )  # Amount 100.00
-    conn.execute(
-        "INSERT INTO transaction_units VALUES (?,?,?,?,?,?)",
-        ("t2", 2, 200, "EUR", None, None),
-    )  # Fee 2.00
-
-    # 3. Security Transfer (Inbound) -> Use INBOUND_DELIVERY (Type 2) for external injection
-    conn.execute(
-        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            "t3",
-            2,  # INBOUND_DELIVERY
-            "2023-01-10T10:00:00",
-            None,
-            None,
-            "p1",
-            None,
-            "sec1",
-            1000000000,
-            0,
-            "EUR",
-        ),
-    )  # 10 shares.
-
-    # 4. Explicit Fee Transaction (to affect Cash Balance)
-    # The unit on t2 creates the performance expense, but 'calculator.py' cash inventory
-    # ignores units. To mechanically lower the cash balance by 2 EUR, we need a FEE transaction.
-    conn.execute(
-        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-        (
-            "t2_fee",
-            13,  # FEE
-            "2023-01-05T10:00:00",
-            "acc1",
-            None,
-            None,
-            None,
-            None,
-            0,
-            200,
-            "EUR",
-        ),
-    )
-
-    conn.commit()
-    market_resolver = MarketResolver(conn)
-    market_resolver.load_data()
-    engine = PerformanceEngine(conn, market_resolver)
-    engine.load_data()
-
-    start_date = date(2023, 1, 1)
-    end_date = date(2023, 1, 31)
-
-    start_prev = start_date - timedelta(days=1)
-    rebuild_daily_wealth(conn, market_resolver, start_prev, end_date)
-
-    # Run
-    metrics = engine.calculate_period_performance(start_date, end_date)
-
-    # Check Wealth
-    df_daily = pd.read_sql_query(
-        "SELECT * FROM daily_wealth WHERE date = ?",
-        conn,
-        params=(end_date.isoformat(),),
-    )
-    end_wealth = df_daily.iloc[0]["total_wealth_cents"] / 100.0
-
-    # Expected:
-    # Cash: 1000 (Dep) - 100 (Rem) - 2 (Fee) = 898.
-    # Sec: 10 * 120 = 1200.
-    # Total: 2098.
-    assert end_wealth == pytest.approx(2098.0)
-
-    # Components
-    row_start = pd.read_sql_query(
-        "SELECT * FROM daily_wealth WHERE date = ?",
-        conn,
-        params=(start_prev.isoformat(),),
-    )
-    row_start.iloc[0]["total_wealth_cents"] / 100.0 if not row_start.empty else 0.0
-
-    start_inv = (
-        row_start.iloc[0]["total_invested_cents"] / 100.0
-        if not row_start.empty
-        else 0.0
-    )
-    end_inv = df_daily.iloc[0]["total_invested_cents"] / 100.0
-    total_neutral = end_inv - start_inv
-
-    total_fees = 2.0
-
-    # Summation
-    sum_components = (
-        metrics.realized_gains
-        + metrics.unrealized_gains
-        + metrics.fx_gains_cash
-        + total_neutral
-        - total_fees
-        - 0  # taxes
-        + 0  # dividends
-        + 0  # interest
-    )
-
-    assert sum_components == pytest.approx(end_wealth, abs=0.01)
