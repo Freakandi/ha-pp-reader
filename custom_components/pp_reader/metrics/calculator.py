@@ -313,8 +313,12 @@ class PerformanceEngine:
                 fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_ts)
                 value_eur = (abs(tx.amount) / 100.0) / (fx_rate if fx_rate else 1.0)
 
-            # Gross up the value with associated fees/taxes
-            total_value_eur = value_eur + unit_sums_eur.get(tx.uuid, 0.0)
+            # Gross up the value with associated fees/taxes only for Inflows
+            if sign > 0:
+                total_value_eur = value_eur + unit_sums_eur.get(tx.uuid, 0.0)
+            else:
+                total_value_eur = value_eur
+
             invested_capital += total_value_eur * sign
 
         return invested_capital
