@@ -371,7 +371,8 @@ This phase ensures the Frontend receives data solely from the *invariant* backen
         *   **New:** Inject/Use `MarketResolver` (Phase 2).
     *   **Endpoints:**
         *   `get_portfolio_positions`:
-            *   Use `PerformanceEngine.get_snapshot(Today)` for quantities and cost basis.
+            *   Use `PerformanceEngine.get_snapshot(Today)` for quantities.
+            *   Use `PerformanceEngine.get_fifo_active_lots()` for Cost Basis (Lifetime Gain).
             *   Use `MarketResolver.get_price(Today)` for current valuations.
         *   `get_security_snapshot`:
             *   Detailed view. Requires `MarketResolver` for full price history.

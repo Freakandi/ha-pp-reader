@@ -82,6 +82,10 @@
 *   **Refinement:** Clarified Phase 4 Vectorization logic. Explicitly stated that groupby must include `security_uuid` (for securities) or `account_uuid` + `currency_code` (for cash) to ensure inventory tracking granularity is not lost.
 
 ### Session: Refactor Phase 2 Refinement (2026-01-04)
-*   **Correction:** Identified that Phase 2 documentation incorrectly specified in-memory FX management for `MarketResolver`.
+*   **Correction:** Identified that Phase 2 documentation incorrectly specified in-memory FX FX management for `MarketResolver`.
 *   **Resolution:** Updated `tasks/refactor_calculations.md` to explicitly state that `MarketResolver` delegates FX lookups to the shared `metrics.core.fx_access` kernel, ensuring consistency with Ingestion (Phase 1).
 *   **Cleanup:** Removed references to bulk loading `fx_rates` and `exchange_rates` from `MarketResolver` responsibilities.
+
+### Session: Refactor Phase 4 Refinement (2026-01-06)
+*   **Correction:** `PerformanceEngine.get_snapshot` is insufficient for the "Overview Tab" because it does not provide granular FIFO cost basis for active lots.
+*   **Decision:** Updated Phase 4 Section 1.1 plan to expose `get_fifo_active_lots` from `PerformanceEngine`. This ensures we can calculate Lifetime Unrealized Gains correctly by summing the cost of remaining tax lots.

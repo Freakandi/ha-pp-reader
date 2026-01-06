@@ -23,6 +23,10 @@ The `securities.py` module currently duplicates logic found in `PerformanceEngin
 - [x] **Update `get_snapshot`**:
     - Add optional argument: `portfolio_uuid: str | None = None`.
     - Pass this argument to `_get_holdings_at_date`, `_get_account_balances` (add filter there too), and `_calculate_invested_capital` (filter transactions first).
+- [ ] **Expose `get_fifo_active_lots`**:
+    - Add method `get_fifo_active_lots(self, scope_uuid: str | None = None) -> dict[str, list[Lot]]`.
+    - This must perform the *same* FIFO replay logic as `calculate_realized_performance`, but return the **final inventory state** (Active Lots) instead of the popped realized trades.
+    - Used by `securities.py` to calculate "Lifetime Unrealized Gain" (Current Value - Sum(Lot Cost)).
 
 ### 1.2 Rewrite `securities.py`
 - [ ] **Import Dependencies**:
@@ -34,11 +38,14 @@ The `securities.py` module currently duplicates logic found in `PerformanceEngin
     - **Per Portfolio**:
         - Call `snapshot = engine.get_snapshot(today, portfolio_uuid=p_uuid)`.
         - Extract `invested_capital` from snapshot for the *portfolio* (used for "Purchase Value" fallback).
-        - Call `holdings = engine._get_holdings_at_date(today, portfolio_uuid=p_uuid)` to get active securities in this portfolio.
+        - Call `holdings = engine._get_holdings_at_date(today, portfolio_uuid=p_uuid)` to get active securities in this portfolio (Aggregated Quantities).
+        - Call `active_lots = engine.get_fifo_active_lots(scope_uuid=p_uuid)` to get granular cost basis.
     - **Per Security (in Portfolio)**:
         - Get Price/FX from `market_resolver`.
         - Calculate `current_value` using `holdings[sec_uuid] * price`.
-        - **Gain Calculation:** Use simple `Current - Cost` (where Cost can be derived or simplified).
+        - **Gain Calculation:**
+            - `Cost_Basis` = Sum of `(lot.price_native * lot.shares)` for all lots in `active_lots[sec_uuid]`.
+            - `Unrealized_Gain` = `Current_Value - Cost_Basis`.
     - **Output:** Construct `SecurityMetricRecord` objects.
 
 ## 2. History & Charts Refactor (`metrics/history.py` & `websocket.py`)
