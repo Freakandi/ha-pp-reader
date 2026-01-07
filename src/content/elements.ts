@@ -545,6 +545,34 @@ export function renderLoadingState(message = "Laden..."): string {
   `;
 }
 
+export function renderErrorState(
+  message: string,
+  retry?: { label?: string; attrs?: string },
+): string {
+  const safeMessage = escapeHtml(message);
+  // Using an alert icon (Material Design 'alert-circle-outline')
+  const icon = `
+    <svg class="error-icon" viewBox="0 0 24 24" aria-hidden="true" style="width: 1.5em; height: 1.5em; fill: var(--error-color, #db4437); vertical-align: middle; flex-shrink: 0;">
+       <path d="M13,13H11V7H13M13,17H11V15H13M12,2A10,10 0 0,0 2,12A10,10 0 0,0 12,22A10,10 0 0,0 22,12A10,10 0 0,0 12,2Z" />
+    </svg>
+  `;
+
+  let retryBtn = "";
+  if (retry) {
+    const label = retry.label ? escapeHtml(retry.label) : "Erneut versuchen";
+    // retry.attrs assumed to be constructed safely by caller (e.g. data attributes)
+    retryBtn = ` <button ${retry.attrs || ""}>${label}</button>`;
+  }
+
+  return `
+    <div class="error" role="alert" style="display: flex; align-items: center; justify-content: center; gap: 0.75rem; color: var(--error-color, #db4437);">
+      ${icon}
+      <span>${safeMessage}</span>
+      ${retryBtn}
+    </div>
+  `;
+}
+
 // === Stacked Column Helpers ===
 export function stack(
   topVal: number | string,
