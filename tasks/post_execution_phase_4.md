@@ -100,3 +100,41 @@
 *   **Immediate Action**: Fix the `PLR0915` error in `calculator.py` by extracting the `fees/taxes` calculation block into a helper method `_calculate_period_fees_taxes`.
 *   **Next Phase**: Proceed to Phase 4.2 (Frontend Integration).
 *   **Note**: The backend now exposes the correct data structure. Frontend `api.ts` must be updated to match `PerformanceMetrics` JSON output.
+
+# Assessment: PR #785 - Phase 4 UI Cleanup Refactor
+
+## 1. Execution Summary
+- **Outcome:** Partial Success (Backend Complete, Integration Incomplete)
+- **Session ID:** `17045895335700210572`
+- **Focus:** Backend refactoring of `PerformanceMetrics` and `metrics/history.py` to support new UI contracts.
+- **Files Changed:** `custom_components/pp_reader/metrics/calculator.py`, `custom_components/pp_reader/metrics/history.py`, `tasks/refactor_phase_4_ui_cleanup.md`.
+- **Completeness:** 
+    - Section 1 (Checklist) Complete.
+    - Section 2 (Backend Engine) Complete & Verified.
+    - Section 3 (Frontend) Not attempted.
+    - Section 4 (History) Partial (Naive implementation, not vectorized).
+    - Section 5 (Realized Trades) Partial (Placeholder returns).
+
+## 2. Quality Check
+- **Architecture:** 
+    - `calculator.py`: Strong adherence. New fields (`start_wealth`, `dividends` etc.) correctly populated.
+    - `history.py`: Weak adherence. Naive loop implementation (`for d in date_range: get_snapshot(d)`) ignores the "Vectorized Implementation" requirement but serves as a functional baseline.
+    - `websocket.py`: **BROKEN**. Calls `engine.get_daily_wealth`, which appears to be missing from `PerformanceEngine` after refactor.
+- **Linting:** Passed (`ruff check .`).
+- **Tests:**
+    - `tests/metrics/test_performance_summation.py`: **Passed** (1 passed).
+    - `tests/test_ws_daily_wealth.py`: **Failed** (5 failures). Confirms `websocket.py` breakage due to API mismatch.
+
+## 3. Recommendations
+- **Immediate Fix Required:** `websocket.py` must be updated to either use the new `rebuild_daily_wealth` flow (via SQL query) or `PerformanceEngine` must re-implement `get_daily_wealth`. The plan mandates the former (SQL Query).
+- **Refinement:** `rebuild_daily_wealth` in `history.py` should be optimized to vectorization later, but correctness is priority now.
+- **Next Step:** Manually fix `websocket.py` to restore green tests before proceeding to Frontend.
+
+## v2. Correction (User applied)
+- **Status:** Success
+- **Fixes Applied:**
+    - `websocket.py` now queries `daily_wealth` table directly for chart data (zero-fill reindexing added).
+    - `websocket.py` now correctly instantiates `PerformanceEngine` with `MarketResolver` for metrics.
+    - `test_ws_daily_wealth.py` updated to populate `daily_wealth` table in tests and assert correct "lean" API output.
+- **Verification:** All tests passed (`test_ws_daily_wealth`, `test_performance_summation`, `test_history`). Linting passed.
+- **Outcome:** Ready for Phase 4.3 (Frontend).
