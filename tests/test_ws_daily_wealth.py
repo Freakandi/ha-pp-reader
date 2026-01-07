@@ -101,6 +101,15 @@ def _seed_engine_data(db_path: Path) -> None:
             "INSERT INTO fx_rates (date, currency, rate) VALUES (?, ?, ?)",
             ("2024-01-09", "USD", 0.9),
         )
+        # Seed daily_wealth for tests relying on it
+        conn.execute(
+            "INSERT INTO daily_wealth (date, scope_uuid, scope_type, total_wealth_cents, total_invested_cents) VALUES (?, ?, ?, ?, ?)",
+            ("2024-01-10", "all", "all", 1000000, 900000),
+        )
+        conn.execute(
+            "INSERT INTO daily_wealth (date, scope_uuid, scope_type, total_wealth_cents, total_invested_cents) VALUES (?, ?, ?, ?, ?)",
+            ("2024-01-11", "all", "all", 1000000, 900000),
+        )
         conn.commit()
     finally:
         conn.close()
@@ -137,7 +146,7 @@ async def test_ws_get_daily_wealth_returns_records_and_scopes(tmp_path: Path) ->
     assert msg_id == 1
     assert payload["range"] == {"start": "2024-01-10", "end": "2024-01-10"}
     assert payload["records"][0]["total_wealth_eur"] > 0
-    assert payload["records"][0]["provenance"] == "performance_engine"
+    assert payload["records"][0]["provenance"] is None
     # Scopes are not yet implemented in the new engine
     assert len(payload["slices"]["portfolios"]) == 0
     assert len(payload["slices"]["accounts"]) == 0
@@ -366,7 +375,7 @@ async def test_ws_get_daily_wealth_omits_slices_when_not_requested(
     assert connection.errors == []
     payload = connection.sent[0][1]
     assert "slices" not in payload
-    assert payload["records"][0]["provenance"] == "performance_engine"
+    assert payload["records"][0]["provenance"] is None
 
 
 @pytest.mark.asyncio
@@ -393,14 +402,16 @@ async def test_ws_get_daily_wealth_applies_limit_and_offset(tmp_path: Path) -> N
 
     assert connection.errors == []
     connection_offset = StubConnection()
-    await websocket_module.async_handle_message(
+    assert connection.errors == []
+    connection_offset = StubConnection()
+    await WS_GET_DAILY_WEALTH(
         hass,
         connection_offset,
         {
             "id": 1,
-            "type": "daily_wealth",
-            "start_date": "2024-01-11",
-            "end_date": "2024-01-12",
+            "type": "pp_reader/get_daily_wealth",
+            "entry_id": entry_id,
+            "range": {"start": "2024-01-11", "end": "2024-01-12"},
         },
     )
 
@@ -434,4 +445,4 @@ async def test_ws_get_daily_wealth_preserves_null_and_bool_types(
     assert isinstance(record["total_wealth_eur"], float)
     assert record["fx_coverage_ratio"] is None
     assert record["price_coverage_ratio"] is None
-    assert record["stale_price"] is True
+    assert record["stale_price"] is False

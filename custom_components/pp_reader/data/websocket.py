@@ -30,6 +30,7 @@ from custom_components.pp_reader.metrics.calculator import (
     PerformanceBreakdown,
     PerformanceEngine,
 )
+from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver
 from custom_components.pp_reader.util import async_run_executor_job
 from custom_components.pp_reader.util.currency import round_currency, round_price
 
@@ -1173,29 +1174,25 @@ async def ws_get_trades(
 
     def _calc_trades() -> list[dict[str, Any]]:
         with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
-            engine = PerformanceEngine(conn)
+            market_resolver = MarketResolver(conn)
+            engine = PerformanceEngine(conn, market_resolver)
             engine.load_data()
 
-            start_date = date(1900, 1, 1)
-            end_date = datetime.now(tz=UTC).date()
+            realized_trades = engine.calculate_realized_performance()
 
-            realized_gains, _ = engine._calculate_capital_gains(  # noqa: SLF001
-                engine._df_txs,  # noqa: SLF001
-                start_date,
-                end_date,
-            )
-
-            # This is a simplification. The original function returns a detailed list of trades.  # noqa: E501
-            # The new engine currently only calculates the total realized gains.
-            # For now, we will return a single trade representing the total.
+            # Serialize
             return [
                 {
-                    "security_uuid": "TOTAL",
-                    "name": "Total Realized Gains",
-                    "currency_code": "EUR",
-                    "result_abs": realized_gains,
-                    "lots": [],
+                    "security_uuid": t.security_uuid,
+                    "buy_date": t.buy_date.isoformat(),
+                    "sell_date": t.sell_date.isoformat(),
+                    "shares": t.shares,
+                    "buy_cost_eur": t.buy_cost_eur,
+                    "sell_value_eur": t.sell_value_eur,
+                    "realized_gain_eur": t.realized_gain_eur,
+                    "opportunity_gain_eur": t.opportunity_gain_eur,
                 }
+                for t in realized_trades
             ]
 
     try:
@@ -1449,18 +1446,59 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
             chart_start = params.start_date - pd.Timedelta(days=1)
 
             with sqlite3.connect(f"file:{db_path}?mode=ro", uri=True) as conn:
-                engine = PerformanceEngine(conn)
-                engine.load_data()
+                # 1. Chart Data (Time Series) - QUERY DIRECTLY FROM DB
+                # We assume scope_type='all' and scope_uuid='all' for the main chart
+                query = """
+                    SELECT date, total_wealth_cents, total_invested_cents
+                    FROM daily_wealth
+                    WHERE date >= ? AND date <= ?
+                    AND scope_type = 'all' AND scope_uuid = 'all'
+                """
 
-                # 1. Chart Data (Time Series)
-                daily_wealth_df = engine.get_daily_wealth(chart_start, params.end_date)
+                daily_wealth_df = pd.read_sql_query(
+                    query,
+                    conn,
+                    params=(chart_start.isoformat(), params.end_date.isoformat()),
+                    parse_dates=["date"]
+                )
 
-                # 2. Metrics (Aggregates) - Reuses loaded data!
+                # Reindex to ensure continuity (Zero-Fill)
+                full_idx = pd.date_range(
+                    start=chart_start, end=params.end_date, freq="D"
+                )
+                if not daily_wealth_df.empty:
+                    daily_wealth_df["date"] = pd.to_datetime(daily_wealth_df["date"])
+                    daily_wealth_df = daily_wealth_df.set_index("date")
+                    daily_wealth_df = daily_wealth_df.reindex(full_idx, fill_value=0)
+                else:
+                    daily_wealth_df = pd.DataFrame(index=full_idx)
+                    daily_wealth_df["total_wealth_cents"] = 0
+                    daily_wealth_df["total_invested_cents"] = 0
+
+                daily_wealth_df = daily_wealth_df.reset_index().rename(
+                    columns={"index": "date"}
+                )
+
+                daily_wealth_df["total_wealth_eur"] = (
+                    daily_wealth_df["total_wealth_cents"] / 100.0
+                )
+                daily_wealth_df["invested_capital_eur"] = (
+                    daily_wealth_df["total_invested_cents"] / 100.0
+                )
+                # Ensure date is YYYY-MM-DD string
+                daily_wealth_df["date"] = daily_wealth_df["date"].dt.strftime(
+                    "%Y-%m-%d"
+                )
+
+                # 2. Metrics (Aggregates)
                 metrics = None
                 if params.start_date and params.end_date:
+                    # Only instantiate Engine if metrics are needed
+                    market_resolver = MarketResolver(conn)
+                    engine = PerformanceEngine(conn, market_resolver)
+                    engine.load_data()
+
                     # Check if explicit metrics_start is provided
-                    # (e.g. for aligning with UI selection while fetching
-                    # chart info from start-1)
                     calc_start = params.start_date
                     explicit_start = _parse_iso_date(msg.get("metrics_start"))
                     if explicit_start:
@@ -1471,10 +1509,17 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                         params.end_date,
                     )
                     metrics = {
+                        "start_wealth": perf.start_wealth,
+                        "end_wealth": perf.end_wealth,
                         "absolute_performance": perf.absolute_performance,
                         "realized_gains": perf.realized_gains,
                         "unrealized_gains": perf.unrealized_gains,
                         "fx_gains_cash": perf.fx_gains_cash,
+                        "dividends": perf.dividends,
+                        "fees": perf.fees,
+                        "taxes": perf.taxes,
+                        "interest": perf.interest,
+                        "net_transfers": perf.net_transfers,
                         "twr": perf.twr,
                         "irr": perf.irr,
                     }
@@ -1531,6 +1576,12 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
         return
 
     records = [_serialize_daily_wealth(rec) for rec in totals]
+
+    # Apply Offset/Limit for Pagination (if requested)
+    if params.limit is not None:
+        start_idx = params.offset or 0
+        end_idx = start_idx + params.limit
+        records = records[start_idx:end_idx]
 
     # --- Period-Specific Realized Gains Calculation ---
     # Standard daily_wealth stores absolute realized gains (Buy->Sell).
