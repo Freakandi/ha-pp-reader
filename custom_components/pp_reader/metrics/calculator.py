@@ -65,6 +65,8 @@ class PerformanceMetrics:
     irr: float = 0.0
 
     # UI Waterfall components
+    start_wealth: float = 0.0
+    end_wealth: float = 0.0
     dividends: float = 0.0
     fees: float = 0.0
     taxes: float = 0.0
@@ -716,6 +718,8 @@ class PerformanceEngine:
         end_state = self.get_snapshot(end_date)
         start_wealth = start_state["total_wealth"]
         end_wealth = end_state["total_wealth"]
+        metrics.start_wealth = start_wealth
+        metrics.end_wealth = end_wealth
 
         # 2. Calculate Net External Flows for the period
         start_ts = pd.Timestamp(start_date, tz="UTC")

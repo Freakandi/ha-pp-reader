@@ -35,7 +35,7 @@ We must enrich the `PerformanceMetrics` object to support the UI's waterfall cha
     - **Note:** Ensure `fees` and `taxes` are stored as **Positive Magnitudes** (sum of absolute values) to match `daily_wealth` legacy contract, simplifying frontend migration. `net_transfers` should be signed (Net Flow).
 
 ### 2.3 Add Wealth Anchors (New Requirement)
-- [ ] **Enrich `PerformanceMetrics`**:
+- [x] **Enrich `PerformanceMetrics`**:
     - Add fields: `start_wealth`, `end_wealth` (floats, default 0.0).
     - Populate `metrics.start_wealth` = `start_virtual_inventory.total_wealth`.
     - Populate `metrics.end_wealth` = `final_virtual_inventory.total_wealth`.
