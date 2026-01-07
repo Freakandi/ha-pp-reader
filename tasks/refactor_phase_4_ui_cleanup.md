@@ -45,10 +45,10 @@ We must enrich the `PerformanceMetrics` object to support the UI's waterfall cha
 **Goal:** strict separation. Backend provides truths, Frontend renders them.
 
 ### 3.1 Refactor Frontend Types (`src/data/api.ts`)
-- [ ] **Update `DailyWealthRecord` interface**:
+- [x] **Update `DailyWealthRecord` interface**:
     - **Remove** all breakdown fields: `dividends_eur`, `fees_eur`, `taxes_eur`, `interest_eur`, `realized_gains_eur`, `unrealized_gains_eur`, `performance_neutral_movements`.
     - **Keep**: `date`, `total_wealth_eur`, `invested_capital_eur`, `fx_coverage_ratio`, `price_coverage_ratio`, `stale_price`, `provenance`.
-- [ ] **Update `PerformanceMetrics` interface**:
+- [x] **Update `PerformanceMetrics` interface**:
     - **Ensure Compliance with Master Plan Waterfall:**
     - `start_wealth: number;`
     - `end_wealth: number;`
@@ -63,7 +63,7 @@ We must enrich the `PerformanceMetrics` object to support the UI's waterfall cha
     - `net_transfers: number;`
 
 ### 3.2 Refactor Frontend Logic (`src/tabs/time_series.ts`)
-- [ ] **Update `derivePerformance` function**:
+- [x] **Update `derivePerformance` function**:
     - **DELETE** the "Legacy Client-Side Calculation" branch.
     - **Logic:**
         - If `responseMetrics` is missing: return `null`.
@@ -76,7 +76,7 @@ We must enrich the `PerformanceMetrics` object to support the UI's waterfall cha
         - `fxGains = responseMetrics.fx_gains_cash`
         - `netTransfers = metrics.net_transfers`
         - `marketGain = realized + unrealized`
-- [ ] **Verify `renderMetrics`**:
+- [x] **Verify `renderMetrics`**:
     - **Strict Waterfall Order:**
         1. Start Wealth
         2. Unrealized Gains (Expandable)

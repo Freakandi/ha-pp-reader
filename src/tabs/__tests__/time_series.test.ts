@@ -22,18 +22,6 @@ const sampleData: DailyWealthResponse = {
     {
       date: '2024-01-01',
       total_wealth_eur: 1000,
-      portfolio_wealth_eur: 600,
-      account_wealth_eur: 400,
-      dividends_eur: 5,
-      interest_eur: 2,
-      inbound_transfers_eur: 100,
-      outbound_transfers_eur: 20,
-      performance_neutral_movements: 10,
-      fees_eur: 3,
-      taxes_eur: 4,
-      realized_gains_eur: 0,
-      unrealized_gains_eur: 0,
-      unrealized_price_gains_eur: 0,
       invested_capital_eur: 10000,
       fx_coverage_ratio: 0.8,
       price_coverage_ratio: 1,
@@ -42,18 +30,6 @@ const sampleData: DailyWealthResponse = {
     {
       date: '2024-01-02',
       total_wealth_eur: 1200,
-      portfolio_wealth_eur: 700,
-      account_wealth_eur: 500,
-      dividends_eur: 0,
-      interest_eur: 1,
-      inbound_transfers_eur: 50,
-      outbound_transfers_eur: 0,
-      performance_neutral_movements: -5,
-      fees_eur: 2,
-      taxes_eur: 1,
-      realized_gains_eur: 10,
-      unrealized_gains_eur: 0,
-      unrealized_price_gains_eur: 0,
       invested_capital_eur: 650,
       fx_coverage_ratio: 0.8,
       price_coverage_ratio: 0.9,
@@ -68,22 +44,7 @@ const sampleData: DailyWealthResponse = {
         scope_name: 'Giro',
         date: '2024-01-02',
         total_wealth_eur: 500,
-        portfolio_wealth_eur: 0,
-        account_wealth_eur: 500,
-        dividends_eur: 0,
-        interest_eur: 1,
-        inbound_transfers_eur: 50,
-        outbound_transfers_eur: 0,
-        performance_neutral_movements: 0,
-        fees_eur: 0,
-        taxes_eur: 0,
-        realized_gains_eur: 0,
-        unrealized_gains_eur: 0,
-        unrealized_price_gains_eur: 0,
         invested_capital_eur: 5000,
-        fx_coverage_ratio: 1,
-        price_coverage_ratio: 1,
-        stale_price: false,
       },
     ],
     portfolios: [
@@ -93,24 +54,22 @@ const sampleData: DailyWealthResponse = {
         scope_name: 'Depot',
         date: '2024-01-02',
         total_wealth_eur: 700,
-        portfolio_wealth_eur: 700,
-        account_wealth_eur: 0,
-        dividends_eur: 0,
-        interest_eur: 0,
-        inbound_transfers_eur: 0,
-        outbound_transfers_eur: 0,
-        performance_neutral_movements: 0,
-        fees_eur: 2,
-        taxes_eur: 1,
-        realized_gains_eur: 5,
-        unrealized_gains_eur: 0,
-        unrealized_price_gains_eur: 0,
         invested_capital_eur: 650,
-        fx_coverage_ratio: 0.9,
-        price_coverage_ratio: 0.9,
-        stale_price: true,
       },
     ],
+  },
+  metrics: {
+    start_wealth: 1000,
+    end_wealth: 1200,
+    absolute_performance: 150,
+    realized_gains: 10,
+    unrealized_gains: 115,
+    fx_gains_cash: 5,
+    dividends: 20,
+    interest: 5,
+    fees: -2,
+    taxes: -3,
+    net_transfers: 50,
   },
 };
 
@@ -147,16 +106,26 @@ test('Analyse tab renders totals, performance, coverage badges, and chart slices
 });
 
 test('derivePerformanceForTest reconciles totals and cashflows', () => {
-  const breakdown = ANALYSE_TEST_ONLY.derivePerformanceForTest(sampleData.records);
+  const breakdown = ANALYSE_TEST_ONLY.derivePerformanceForTest(
+    sampleData.records,
+    sampleData.metrics,
+  );
   assert.ok(breakdown, 'expected breakdown from sample data');
-  assert.strictEqual(breakdown.startValue, 1000);
-  assert.strictEqual(breakdown.endValue, 1200);
-  const delta =
+  assert.strictEqual(breakdown.startValue, sampleData.metrics?.start_wealth);
+  assert.strictEqual(breakdown.endValue, sampleData.metrics?.end_wealth);
+
+  const totalChange = (sampleData.metrics?.end_wealth ?? 0) - (sampleData.metrics?.start_wealth ?? 0);
+  const componentsSum =
     breakdown.marketGain +
-    breakdown.ertraege +
+    breakdown.dividends +
+    breakdown.interest +
     breakdown.fees +
     breakdown.taxes +
-    breakdown.netTransfers +
-    breakdown.neutral;
-  assert.ok(Math.abs(delta - 200) < 1e-6, 'components should sum to total change');
+    breakdown.fxGains +
+    breakdown.netTransfers;
+
+  assert.ok(
+    Math.abs(componentsSum - totalChange) < 1e-6,
+    `The sum of performance components (€${componentsSum.toFixed(2)}) should equal the total change in wealth (€${totalChange.toFixed(2)})`,
+  );
 });
