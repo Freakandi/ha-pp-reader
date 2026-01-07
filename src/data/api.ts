@@ -697,21 +697,11 @@ export interface DailyWealthRequest extends DailyWealthFetchOptions {
 export interface DailyWealthRecord {
   date: string;
   total_wealth_eur: number;
-  dividends_eur?: number;
-  interest_eur?: number;
-  fees_eur?: number;
-  taxes_eur?: number;
-  inbound_transfers_eur?: number;
-  outbound_transfers_eur?: number;
-  performance_neutral_movements?: number;
-  realized_gains_eur?: number;
-  realized_price_gains_eur?: number;
-  unrealized_gains_eur?: number;
-  unrealized_price_gains_eur?: number;
-  fx_gains_eur?: number;
+  invested_capital_eur?: number;
   fx_coverage_ratio?: number | null;
   price_coverage_ratio?: number | null;
   stale_price?: boolean;
+  provenance?: string;
   [key: string]: unknown;
 }
 
@@ -730,10 +720,17 @@ export interface DailyWealthSlices {
 }
 
 export interface PerformanceMetrics {
+  start_wealth: number;
+  end_wealth: number;
   absolute_performance: number;
   realized_gains: number;
   unrealized_gains: number;
   fx_gains_cash: number;
+  dividends: number;
+  fees: number;
+  taxes: number;
+  interest: number;
+  net_transfers: number;
   twr?: number;
   irr?: number;
 }

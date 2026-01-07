@@ -142,16 +142,6 @@ function formatCurrency(value: number): string {
   return `${formatNumber(value)}&nbsp;€`;
 }
 
-function sumField(records: DailyWealthRecord[], key: keyof DailyWealthRecord): number {
-  return records.reduce((sum, record) => {
-    const value = record[key];
-    if (typeof value === 'number' && Number.isFinite(value)) {
-      return sum + value;
-    }
-    return sum;
-  }, 0);
-}
-
 function setStatus(card: HTMLElement, status: DailyWealthState['status'], message = ''): void {
   const statusEl = card.querySelector<HTMLElement>('#analyse-status');
   if (!statusEl) {
@@ -654,93 +644,52 @@ function renderWealthChart(chartCard: HTMLElement, data: DailyWealthResponse): v
  * The first record (index 0) is treated as the baseline (morning of start date).
  * Subsequent records are treated as the activity within the selected period.
  */
-function derivePerformance(records: DailyWealthRecord[], responseMetrics?: DailyWealthResponse['metrics']): PerformanceBreakdown | null {
-  if (records.length < 1) {
+function derivePerformance(
+  records: DailyWealthRecord[],
+  responseMetrics?: DailyWealthResponse['metrics'],
+): PerformanceBreakdown | null {
+  // If we don't have metrics from the backend, we can't display anything.
+  if (!responseMetrics) {
     return null;
   }
 
-  // Baseline is the state at the end of the day BEFORE the period starts.
-  // This represents the "Morning of start date" value.
-  const baseline = records[0];
-  const startValue = baseline.total_wealth_eur;
-
-  // If we only have one record, it means start-1 was requested but we only got one day.
-  // Or the range was just one day and we have no baseline.
-  // In this case, we have to treat startValue as 0 or the first record's value.
-  const periodRecords = records.length > 1 ? records.slice(1) : records;
-  const latest = records[records.length - 1];
-  const endValue = latest.total_wealth_eur;
-
-  // Period Cashflows
-  const dividends = sumField(periodRecords, 'dividends_eur');
-  const interest = sumField(periodRecords, 'interest_eur');
-  const ertraege = dividends + interest;
-  const fees = -Math.abs(sumField(periodRecords, 'fees_eur'));
-  const taxes = -Math.abs(sumField(periodRecords, 'taxes_eur'));
-  const netTransfers = sumField(periodRecords, 'inbound_transfers_eur') - sumField(periodRecords, 'outbound_transfers_eur');
-  const neutral = sumField(periodRecords, 'performance_neutral_movements');
-
-  // Total Delta = E - A
-  const delta = endValue - startValue;
-  // Total Performance = Delta - Neutral Capital Movements (Transfers + Deliveries)
-  const totalPerformance = delta - (netTransfers + neutral);
-
-  let realizedGains: number;
-  let unrealizedGains: number;
-  let fxGains: number;
-  let twr = 0;
-  let irr = 0;
-
-  if (responseMetrics) {
-    // Phase C: Use Server-Side Metrics as Source of Truth
-    realizedGains = responseMetrics.realized_gains;
-    unrealizedGains = responseMetrics.unrealized_gains;
-    fxGains = responseMetrics.fx_gains_cash;
-    twr = responseMetrics.twr ?? 0;
-    irr = responseMetrics.irr ?? 0;
-  } else {
-    // Legacy Client-Side Calculation
-    realizedGains = sumField(periodRecords, 'realized_gains_eur');
-
-    // Unrealized Gains during Period (Mark-to-Market)
-    const valEnd = latest.unrealized_gains_eur;
-    const valStart = records.length > 1 ? baseline.unrealized_gains_eur : 0;
-    const uEnd = valEnd ?? 0;
-    const uStart = valStart ?? 0;
-    unrealizedGains = uEnd - uStart;
-
-    // Kurserfolge (Gesamt) = Realized + Period Unrealized Change (both include FX)
-    const marketGainCalc = realizedGains + unrealizedGains;
-
-    // FX-Veränderung = Residual balance
-    fxGains = totalPerformance - marketGainCalc - ertraege - fees - taxes;
-  }
-
-  // Market Gain is always Realized + Unrealized (Total Security Performance)
-  const marketGain = realizedGains + unrealizedGains;
-
-  // For display: also track price-only component (Client-side approximation only for now)
-  const uPriceEnd = latest.unrealized_price_gains_eur ?? 0;
-  const uPriceStart = records.length > 1 ? baseline.unrealized_price_gains_eur ?? 0 : 0;
-  const unrealizedPriceGains = uPriceEnd - uPriceStart;
-
-  return {
-    startValue,
-    endValue,
-    marketGain,
-    realizedGains,
-    unrealizedGains,
-    unrealizedPriceGains,
-    fxGains,
+  const {
+    start_wealth,
+    end_wealth,
+    realized_gains,
+    unrealized_gains,
+    fx_gains_cash,
     dividends,
     interest,
-    ertraege,
-    fees,
-    taxes,
-    netTransfers,
-    neutral,
+    fees, // Expect positive magnitude from backend
+    taxes, // Expect positive magnitude from backend
+    net_transfers,
     twr,
     irr,
+  } = responseMetrics;
+
+  const marketGain = realized_gains + unrealized_gains;
+
+  // The ertraege, unrealizedPriceGains, and neutral fields are no longer used in the new renderMetrics,
+  // but let's keep the return type consistent for now.
+  return {
+    startValue: start_wealth,
+    endValue: end_wealth,
+    marketGain,
+    realizedGains: realized_gains,
+    unrealizedGains: unrealized_gains,
+    fxGains: fx_gains_cash,
+    dividends,
+    interest,
+    fees: -Math.abs(fees), // Display as negative flow
+    taxes: -Math.abs(taxes), // Display as negative flow
+    netTransfers: net_transfers,
+    twr: twr ?? 0,
+    irr: irr ?? 0,
+    // Deprecated fields to satisfy the type, will be removed when `PerformanceBreakdown` is updated.
+    ertraege: dividends + interest,
+    unrealizedPriceGains: 0,
+    neutral: 0,
   };
 }
 
