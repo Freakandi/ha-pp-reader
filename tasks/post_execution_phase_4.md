@@ -129,3 +129,12 @@
 - **Immediate Fix Required:** `websocket.py` must be updated to either use the new `rebuild_daily_wealth` flow (via SQL query) or `PerformanceEngine` must re-implement `get_daily_wealth`. The plan mandates the former (SQL Query).
 - **Refinement:** `rebuild_daily_wealth` in `history.py` should be optimized to vectorization later, but correctness is priority now.
 - **Next Step:** Manually fix `websocket.py` to restore green tests before proceeding to Frontend.
+
+## v2. Correction (User applied)
+- **Status:** Success
+- **Fixes Applied:**
+    - `websocket.py` now queries `daily_wealth` table directly for chart data (zero-fill reindexing added).
+    - `websocket.py` now correctly instantiates `PerformanceEngine` with `MarketResolver` for metrics.
+    - `test_ws_daily_wealth.py` updated to populate `daily_wealth` table in tests and assert correct "lean" API output.
+- **Verification:** All tests passed (`test_ws_daily_wealth`, `test_performance_summation`, `test_history`). Linting passed.
+- **Outcome:** Ready for Phase 4.3 (Frontend).

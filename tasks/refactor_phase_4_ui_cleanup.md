@@ -106,7 +106,7 @@ Ensure historical data is pre-calculated in `daily_wealth` using efficient vecto
         5.  **Aggregation:** Sum up Wealth and Invested Capital by `scope_uuid` (Portfolio, Account, or Global 'all').
     - **Persistence:** Bulk insert into `daily_wealth`, replacing existing rows for the scope/date range.
 
-- [ ] **Update `websocket.py:ws_get_daily_wealth`**:
+- [x] **Update `websocket.py:ws_get_daily_wealth`**:
     - **Stop** instantiating `PerformanceEngine` for on-the-fly calculation of *daily* records.
     - **Start** querying `daily_wealth` table directly via SQL.
     - **Metrics Handling:**
@@ -117,7 +117,7 @@ Ensure historical data is pre-calculated in `daily_wealth` using efficient vecto
     - **Strict API:** Do **NOT** inject placeholder columns (zeros) for the deleted breakdown fields in `records`. Do not calculate daily changes client-side.
 
 ## 5. Realized Trades Refactor (`websocket.py:ws_get_trades`)
-- [ ] **Update `ws_get_trades`**:
+- [x] **Update `ws_get_trades`**:
     - Instantiate `MarketResolver(conn)`.
     - Instantiate `PerformanceEngine(conn, market_resolver)`.
     - Call `engine.calculate_realized_performance(scope_uuid=filter)`.
@@ -126,9 +126,9 @@ Ensure historical data is pre-calculated in `daily_wealth` using efficient vecto
 ## 6. Test Plan
 - [ ] **Create `tests/metrics/test_ui_consistency.py`**:
     - `test_waterfall_completeness`: Mock Engine response. Verify `websocket.py` returns the populated `metrics` object.
-- [ ] **Update `tests/metrics/test_performance_summation.py`**:
+- [x] **Update `tests/metrics/test_performance_summation.py`**:
     - Verify `calculate_period_performance` returns correct sums for Dividends/Fees/Taxes in the new fields.
-- [ ] **Fix `tests/test_ws_daily_wealth.py`**:
+- [x] **Fix `tests/test_ws_daily_wealth.py`**:
     - Update expectations to match the new "Lean" `DailyWealthRecord` and "Rich" `PerformanceMetrics`.
 
 ## Complexity & Risk
