@@ -47,3 +47,8 @@
 **Vulnerability:** Found a Stored XSS vulnerability in the `stack` helper function used in `src/tabs/trades.ts` and `src/tabs/overview.ts`. The function interpolated values into `data-val` attributes without escaping, allowing attribute injection.
 **Learning:** Even if data is typed as `number | string`, runtime data or malicious inputs can break out of attributes if not escaped. Simple type assertions are not security boundaries.
 **Prevention:** Always use `escapeAttribute` for any variable interpolated into an HTML attribute, regardless of its expected type. Updated `stack` helper to wrap values in `escapeAttribute`.
+
+## 2025-01-28 - Form Hijacking via Button Attributes
+**Vulnerability:** The regex-based sanitizer in `formatValue` (`src/content/elements.ts`) allowed `formaction` (and related `form*`) attributes on `<button>` elements (which are in the allowlist). `formaction` allows hijacking form submissions to external sites.
+**Learning:** Allowlisting tags like `button` is insufficient without strict attribute control. Regex blacklists often miss newer or tag-specific dangerous attributes.
+**Prevention:** Hardened `DANGEROUS_PATTERN` regex to explicitly block `form[a-z]+` attributes.

@@ -195,7 +195,8 @@ export function formatValue(
         // - on[event]= (inline handlers)
         // - url( (prevent CSS injection in style attributes)
         // - href/src (allowed tags shouldn't need these, blocks potential oversight)
-        const DANGEROUS_PATTERN = /javascript:|data:\w+\/|[\s\/]on[a-z]+\s*=|url\s*\(|[\s\/](?:href|src)\s*=/i;
+        // - formaction/formmethod etc. (prevent form hijacking on buttons)
+        const DANGEROUS_PATTERN = /javascript:|data:\w+\/|[\s\/]on[a-z]+\s*=|url\s*\(|[\s\/](?:href|src|form[a-z]+)\s*=/i;
 
         if (DISALLOWED_TAG_PATTERN.test(formatted) || DANGEROUS_PATTERN.test(formatted)) {
           formatted = escapeHtml(formatted);
