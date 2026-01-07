@@ -1459,7 +1459,7 @@ async def ws_get_daily_wealth(  # noqa: PLR0912, PLR0915
                     query,
                     conn,
                     params=(chart_start.isoformat(), params.end_date.isoformat()),
-                    parse_dates=["date"]
+                    parse_dates=["date"],
                 )
 
                 # Reindex to ensure continuity (Zero-Fill)
