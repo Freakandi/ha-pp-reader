@@ -127,9 +127,7 @@ async def test_waterfall_completeness(tmp_path: Path) -> None:
     # Verify that all fields from the mocked object are present and correct
     assert metrics_response["start_wealth"] == mock_metrics.start_wealth
     assert metrics_response["end_wealth"] == mock_metrics.end_wealth
-    assert (
-        metrics_response["absolute_performance"] == mock_metrics.absolute_performance
-    )
+    assert metrics_response["absolute_performance"] == mock_metrics.absolute_performance
     assert metrics_response["realized_gains"] == mock_metrics.realized_gains
     assert metrics_response["unrealized_gains"] == mock_metrics.unrealized_gains
     assert metrics_response["fx_gains_cash"] == mock_metrics.fx_gains_cash
