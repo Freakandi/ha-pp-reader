@@ -124,7 +124,7 @@ Ensure historical data is pre-calculated in `daily_wealth` using efficient vecto
     - Serialize and return.
 
 ## 6. Test Plan
-- [ ] **Create `tests/metrics/test_ui_consistency.py`**:
+- [x] **Create `tests/metrics/test_ui_consistency.py`**:
     - `test_waterfall_completeness`: Mock Engine response. Verify `websocket.py` returns the populated `metrics` object.
 - [x] **Update `tests/metrics/test_performance_summation.py`**:
     - Verify `calculate_period_performance` returns correct sums for Dividends/Fees/Taxes in the new fields.
