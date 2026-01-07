@@ -93,7 +93,7 @@ We must enrich the `PerformanceMetrics` object to support the UI's waterfall cha
 ## 4. History & Charts Refactor (`metrics/history.py` & `websocket.py`)
 Ensure historical data is pre-calculated in `daily_wealth` using efficient vectorization.
 
-- [ ] **Refactor `metrics/history.py` to Vectorized Implementation**:
+- [x] **Refactor `metrics/history.py` to Vectorized Implementation**:
     - **Goal:** Replace the naive loop `for d in date_range: engine.get_snapshot(d)` with O(N+T) vectorization.
     - **Update Signature:** `rebuild_daily_wealth(conn, market_resolver, start_date, end_date, scopes: list[str] | None = None)`.
     - **Logic:**

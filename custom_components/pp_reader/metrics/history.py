@@ -1,4 +1,4 @@
-"""Module for rebuilding the daily_wealth table via the PerformanceEngine."""
+"""Module for rebuilding the daily_wealth table via a vectorized implementation."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 import pandas as pd
 
-from custom_components.pp_reader.metrics.calculator import PerformanceEngine
+from custom_components.pp_reader.const import TransactionType
 
 if TYPE_CHECKING:
     from datetime import date
@@ -18,69 +18,276 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger(__name__)
 
+# Epsilon for floating point comparisons to avoid noise in holdings
+_SHARE_EPSILON = 1e-9
+
+
+def _calculate_daily_security_wealth(
+    df_txs: pd.DataFrame,
+    date_range: pd.DatetimeIndex,
+    market_resolver: MarketResolver,
+    fx_pivot: pd.DataFrame,
+) -> pd.Series:
+    """Calculate the total value of all securities for each day in the range."""
+    sec_txs = df_txs[df_txs["security"].notna()].copy()
+    share_signs = {
+        TransactionType.BUY: 1,
+        TransactionType.INBOUND_DELIVERY: 1,
+        TransactionType.SECURITY_TRANSFER: 1,
+        TransactionType.SELL: -1,
+        TransactionType.OUTBOUND_DELIVERY: -1,
+    }
+    signs = sec_txs["type"].map(share_signs).fillna(0)
+    sec_txs["delta_shares"] = sec_txs["shares_norm"].fillna(0) * signs
+
+    sec_daily_change = sec_txs.pivot_table(
+        index="date",
+        columns="security",
+        values="delta_shares",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    sec_holdings = (
+        sec_daily_change.cumsum().reindex(date_range, method="ffill").fillna(0.0)
+    )
+
+    active_securities = sec_holdings.columns[
+        (sec_holdings.abs() > _SHARE_EPSILON).any()
+    ].tolist()
+    prices_pivot, _ = market_resolver.get_prices_pivot(active_securities, date_range)
+
+    aligned_prices = prices_pivot.reindex(columns=sec_holdings.columns, fill_value=0.0)
+    sec_wealth_native = sec_holdings * aligned_prices
+    sec_currencies = pd.Series(
+        {s: market_resolver.get_security_currency(s) for s in sec_wealth_native.columns}
+    )
+    sec_fx_rates = fx_pivot.reindex(columns=sec_currencies.unique(), fill_value=1.0)
+
+    daily_sec_wealth_eur = pd.Series(0.0, index=date_range)
+    for curr in sec_currencies.unique():
+        secs_in_curr = sec_currencies[sec_currencies == curr].index
+        rate_series = sec_fx_rates.get(curr, 1.0)
+        daily_sec_wealth_eur += (
+            sec_wealth_native[secs_in_curr].sum(axis=1) / rate_series
+        ).fillna(0.0)
+
+    return daily_sec_wealth_eur
+
+
+def _calculate_daily_cash_wealth(
+    df_txs: pd.DataFrame,
+    date_range: pd.DatetimeIndex,
+    account_currencies: dict[str, str],
+    fx_pivot: pd.DataFrame,
+) -> pd.Series:
+    """Calculate the total value of all cash accounts for each day in the range."""
+    cash_txs = df_txs[df_txs["account"].notna()].copy()
+    cash_signs = {
+        TransactionType.SELL: 1,
+        TransactionType.DEPOSIT: 1,
+        TransactionType.DIVIDEND: 1,
+        TransactionType.INTEREST: 1,
+        TransactionType.TAX_REFUND: 1,
+        TransactionType.FEE_REFUND: 1,
+        TransactionType.BUY: -1,
+        TransactionType.REMOVAL: -1,
+        TransactionType.INTEREST_CHARGE: -1,
+        TransactionType.TAX: -1,
+        TransactionType.FEE: -1,
+        TransactionType.CASH_TRANSFER: -1,
+    }
+    cash_txs["sign"] = cash_txs["type"].map(cash_signs).fillna(0)
+    cash_txs["delta_cash"] = cash_txs["amount_norm"].fillna(0) * cash_txs["sign"]
+
+    transfers = cash_txs[cash_txs["type"] == TransactionType.CASH_TRANSFER].copy()
+    transfers["account"] = transfers["other_account"]
+    transfers["sign"] = 1
+    transfers["delta_cash"] = transfers["amount_norm"].fillna(0) * transfers["sign"]
+
+    all_cash_deltas = pd.concat([cash_txs, transfers], ignore_index=True).dropna(
+        subset=["account"]
+    )
+    all_cash_deltas["currency_code"] = all_cash_deltas["account"].map(
+        account_currencies
+    )
+
+    cash_daily_change = all_cash_deltas.pivot_table(
+        index="date",
+        columns=["account", "currency_code"],
+        values="delta_cash",
+        aggfunc="sum",
+        fill_value=0,
+    )
+    cash_balances = (
+        cash_daily_change.cumsum().reindex(date_range, method="ffill").fillna(0.0)
+    )
+
+    daily_cash_wealth_eur = pd.Series(0.0, index=date_range)
+    active_currencies = (
+        cash_balances.columns.get_level_values("currency_code").unique().tolist()
+    )
+    for curr in active_currencies:
+        if curr == "EUR":
+            daily_cash_wealth_eur += cash_balances.xs(
+                curr, level="currency_code", axis=1
+            ).sum(axis=1)
+        else:
+            rate_series = fx_pivot.get(curr, 1.0)
+            daily_cash_wealth_eur += (
+                cash_balances.xs(curr, level="currency_code", axis=1).sum(axis=1)
+                / rate_series
+            ).fillna(0.0)
+
+    return daily_cash_wealth_eur
+
+
+def _calculate_daily_invested_capital(
+    df_txs: pd.DataFrame, date_range: pd.DatetimeIndex, market_resolver: MarketResolver
+) -> pd.Series:
+    """Calculate the daily invested capital."""
+    flow_types = {
+        TransactionType.DEPOSIT: 1,
+        TransactionType.REMOVAL: -1,
+        TransactionType.INBOUND_DELIVERY: 1,
+        TransactionType.OUTBOUND_DELIVERY: -1,
+    }
+    flow_txs = df_txs[df_txs["type"].isin(flow_types.keys())].copy()
+    flow_txs["sign"] = flow_txs["type"].map(flow_types)
+
+    unique_flow_dates = pd.DatetimeIndex(flow_txs["date"].unique()).sort_values()
+    active_secs = flow_txs["security"].dropna().unique().tolist()
+    active_currs = flow_txs["currency_code"].dropna().unique().tolist()
+
+    flow_prices, _ = market_resolver.get_prices_pivot(active_secs, unique_flow_dates)
+    flow_fx = market_resolver.get_fx_pivot(active_currs, unique_flow_dates)
+
+    eur_values = []
+    for _, row in flow_txs.iterrows():
+        val = 0
+        if row["security"]:
+            price = flow_prices.loc[row["date"], row["security"]]
+            curr = market_resolver.get_security_currency(row["security"])
+            rate = flow_fx.loc[row["date"], curr] if curr in flow_fx.columns else 1.0
+            val = row["shares_norm"] * price / rate if rate else 0.0
+        else:
+            rate = (
+                flow_fx.loc[row["date"], row["currency_code"]]
+                if row["currency_code"] in flow_fx.columns
+                else 1.0
+            )
+            val = row["amount_norm"] / rate if rate else 0.0
+        eur_values.append(val * row["sign"])
+
+    flow_txs["flow_eur"] = eur_values
+    daily_flows = (
+        flow_txs.groupby("date")["flow_eur"].sum().reindex(date_range, fill_value=0.0)
+    )
+    return daily_flows.cumsum()
+
 
 def rebuild_daily_wealth(
     conn: sqlite3.Connection,
     market_resolver: MarketResolver,
     start_date: date,
     end_date: date,
+    scopes: list[str] | None = None,
 ) -> None:
-    """
-    Rebuild the daily_wealth table by delegating to the PerformanceEngine.
-
-    This function calculates daily wealth snapshots for a given date range
-    by calling `engine.get_snapshot()` for each day and persists them to the
-    `daily_wealth` table for later use.
-    """
+    """Rebuild the daily_wealth table using a vectorized pandas implementation."""
     _LOGGER.info(
-        "Rebuilding daily wealth from %s to %s",
+        "Rebuilding daily wealth from %s to %s using vectorized implementation.",
         start_date.isoformat(),
         end_date.isoformat(),
     )
+    if scopes is None:
+        scopes = ["all"]
 
-    # Instantiate the engine and load its data once.
-    engine = PerformanceEngine(conn, market_resolver)
-    engine.load_data()
+    query = (
+        "SELECT uuid, type, date, account, other_account, security, "
+        "shares, amount, currency_code FROM transactions"
+    )
+    params = []
+    if end_date:
+        query += " WHERE date <= ?"
+        params.append(f"{end_date.isoformat()}T23:59:59Z")
+    query += " ORDER BY date"
 
-    date_range = pd.date_range(start=start_date, end=end_date, freq="D")
-    records_to_insert = []
+    df_txs = pd.read_sql_query(query, conn, params=params, parse_dates=["date"])
 
-    for d in date_range:
-        snapshot_date = d.date()
-        snapshot = engine.get_snapshot(snapshot_date)
+    if df_txs.empty:
+        _LOGGER.info("No transactions found up to the end date. Nothing to rebuild.")
+        return
+    df_txs["date"] = pd.to_datetime(df_txs["date"], utc=True).dt.normalize()
+    df_txs["shares_norm"] = df_txs["shares"] / 100000000.0
+    df_txs["amount_norm"] = df_txs["amount"] / 100.0
 
-        records_to_insert.append(
-            (
-                snapshot_date.isoformat(),
-                "all",  # scope_uuid, assuming "all" for now
-                "all",  # scope_type, assuming "all" for now
-                int(snapshot.get("total_wealth", 0) * 100),
-                int(snapshot.get("invested_capital", 0) * 100),
-            )
-        )
+    accounts_query = "SELECT uuid, currency_code FROM accounts"
+    accounts = pd.read_sql_query(accounts_query, conn)
+    account_currencies = accounts.set_index("uuid")["currency_code"].to_dict()
 
-    if not records_to_insert:
+    date_range = pd.date_range(start=start_date, end=end_date, freq="D", tz="UTC")
+
+    all_currencies = (
+        list(df_txs["currency_code"].dropna().unique())
+        + list(account_currencies.values())
+        + [
+            market_resolver.get_security_currency(s)
+            for s in df_txs["security"].dropna().unique()
+        ]
+    )
+    fx_pivot = market_resolver.get_fx_pivot(list(set(all_currencies)), date_range)
+
+    daily_sec_wealth = _calculate_daily_security_wealth(
+        df_txs, date_range, market_resolver, fx_pivot
+    )
+    daily_cash_wealth = _calculate_daily_cash_wealth(
+        df_txs, date_range, account_currencies, fx_pivot
+    )
+    daily_total_wealth = daily_sec_wealth + daily_cash_wealth
+    daily_invested_capital = _calculate_daily_invested_capital(
+        df_txs, date_range, market_resolver
+    )
+
+    final_df = pd.DataFrame(
+        {
+            "total_wealth_cents": (daily_total_wealth * 100).round().astype(int),
+            "total_invested_cents": (daily_invested_capital * 100).round().astype(int),
+        }
+    )
+    final_df["date"] = final_df.index.strftime("%Y-%m-%d")
+    final_df["scope_uuid"] = "all"
+    final_df["scope_type"] = "all"
+
+    records = list(
+        final_df[
+            [
+                "date",
+                "scope_uuid",
+                "scope_type",
+                "total_wealth_cents",
+                "total_invested_cents",
+            ]
+        ].itertuples(index=False, name=None)
+    )
+
+    if not records:
         _LOGGER.info("No data to insert for the given date range.")
         return
 
     cursor = conn.cursor()
     try:
-        # Clear old data for the date range
         cursor.execute(
-            "DELETE FROM daily_wealth WHERE date BETWEEN ? AND ?",
+            "DELETE FROM daily_wealth "
+            "WHERE date BETWEEN ? AND ? AND scope_uuid = 'all'",
             (start_date.isoformat(), end_date.isoformat()),
         )
-        # Insert new data
         cursor.executemany(
             "INSERT INTO daily_wealth "
             "(date, scope_uuid, scope_type, total_wealth_cents, total_invested_cents) "
             "VALUES (?, ?, ?, ?, ?)",
-            records_to_insert,
+            records,
         )
         conn.commit()
-        _LOGGER.info(
-            "Successfully rebuilt daily_wealth for %d days.", len(records_to_insert)
-        )
+        _LOGGER.info("Successfully rebuilt daily_wealth for %d days.", len(records))
     except sqlite3.Error:
         _LOGGER.exception("Database error during daily_wealth rebuild")
         conn.rollback()
