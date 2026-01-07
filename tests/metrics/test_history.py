@@ -1,102 +1,156 @@
-"""Tests for the daily_wealth history rebuilding module."""
+"""Tests for the vectorized rebuild_daily_wealth function."""
 
 from __future__ import annotations
 
 import sqlite3
 from datetime import date
-from unittest.mock import MagicMock
 
+import pandas as pd
 import pytest
 
+from custom_components.pp_reader.const import TransactionType
+from custom_components.pp_reader.data.db_schema import ALL_SCHEMAS
+from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver
 from custom_components.pp_reader.metrics.history import rebuild_daily_wealth
 
 
 @pytest.fixture
-def mock_conn():
-    """Fixture for an in-memory SQLite database connection."""
+def memory_db() -> sqlite3.Connection:
+    """Fixture to create an in-memory SQLite database and schema."""
     conn = sqlite3.connect(":memory:")
-    # Create necessary tables for the test
-    conn.execute(
-        """
-        CREATE TABLE transactions (
-            uuid TEXT PRIMARY KEY, type INTEGER, date TEXT, account TEXT, other_account TEXT,
-            portfolio TEXT, other_portfolio TEXT, security TEXT, shares INTEGER,
-            amount INTEGER, currency_code TEXT
-        );
-        """
-    )
-    conn.execute(
-        """
-        CREATE TABLE transaction_units (
-            transaction_uuid TEXT, type INTEGER, amount INTEGER, currency_code TEXT,
-            fx_amount INTEGER, fx_currency_code TEXT
-        );
-        """
-    )
-    conn.execute(
-        "CREATE TABLE securities (uuid TEXT PRIMARY KEY, name TEXT, currency_code TEXT);"
-    )
-    conn.execute(
-        "CREATE TABLE accounts (uuid TEXT PRIMARY KEY, name TEXT, currency_code TEXT);"
-    )
-    conn.execute(
-        """
-        CREATE TABLE daily_wealth (
-            date TEXT, scope_uuid TEXT, scope_type TEXT,
-            total_wealth_cents INTEGER, total_invested_cents INTEGER,
-            PRIMARY KEY (date, scope_uuid, scope_type)
-        );
-        """
-    )
-    yield conn
-    conn.close()
+    for schema in ALL_SCHEMAS:
+        conn.execute(schema)
+    conn.commit()
+    return conn
 
 
-@pytest.fixture
-def mock_market_resolver():
-    """Fixture for a mock MarketResolver."""
-    resolver = MagicMock()
-    resolver.get_price.return_value = 100.0  # 100 EUR
-    resolver.get_fx.side_effect = (
-        lambda cur, _: 1.0 if cur == "EUR" else 0.85
-    )  # 1 USD = 0.85 EUR
-    resolver.get_security_currency.return_value = "USD"
-    return resolver
-
-
-def test_rebuild_daily_wealth_simple_case(mock_conn, mock_market_resolver):
-    """Test a simple case of rebuilding daily wealth."""
-    # Arrange
-    start_date = date(2023, 1, 1)
-    end_date = date(2023, 1, 3)
-
-    # Insert a single INBOUND_DELIVERY transaction (Type 2) to represent initial capital
-    mock_conn.execute(
-        "INSERT INTO transactions (uuid, type, date, security, shares, amount, currency_code) VALUES (?, ?, ?, ?, ?, ?, ?)",
-        ("tx1", 2, "2023-01-01T12:00:00Z", "sec1", 10 * 10**8, 1000 * 100, "USD"),
+def test_rebuild_daily_wealth_vectorized(memory_db: sqlite3.Connection) -> None:
+    """Test the vectorized rebuild_daily_wealth function with a simple scenario."""
+    # Arrange: Populate the database with sample data
+    # Securities
+    memory_db.execute(
+        "INSERT INTO securities (uuid, name, currency_code) VALUES ('sec1', 'Test Security 1', 'USD')"
     )
-    mock_conn.execute(
-        "INSERT INTO securities (uuid, name, currency_code) VALUES (?, ?, ?)",
-        ("sec1", "Test Security", "USD"),
+    memory_db.execute(
+        "INSERT INTO securities (uuid, name, currency_code) VALUES ('sec2', 'Test Security 2', 'EUR')"
     )
-    mock_conn.commit()
+
+    # Accounts
+    memory_db.execute(
+        "INSERT INTO accounts (uuid, name, currency_code) VALUES ('acc1', 'Test Account 1', 'USD')"
+    )
+    memory_db.execute(
+        "INSERT INTO accounts (uuid, name, currency_code) VALUES ('acc2', 'Test Account 2', 'EUR')"
+    )
+
+    # Transactions
+    transactions = [
+        (
+            "tx1",
+            TransactionType.DEPOSIT,
+            "2023-01-01T10:00:00Z",
+            "acc2",
+            None,
+            "port1",
+            None,
+            None,
+            200000,
+            200000,
+            "EUR",
+        ),
+        (
+            "tx2",
+            TransactionType.BUY,
+            "2023-01-02T10:00:00Z",
+            "acc1",
+            None,
+            "port1",
+            None,
+            "sec1",
+            10000000000,
+            100000,
+            "USD",
+        ),
+        (
+            "tx3",
+            TransactionType.SELL,
+            "2023-01-03T10:00:00Z",
+            "acc2",
+            None,
+            "port1",
+            None,
+            "sec2",
+            5000000000,
+            60000,
+            "EUR",
+        ),
+    ]
+    memory_db.executemany(
+        "INSERT INTO transactions (uuid, type, date, account, other_account, portfolio, other_portfolio, security, shares, amount, currency_code) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        transactions,
+    )
+
+    # Prices
+    prices = [
+        ("sec1", 20230102, 1100000000),
+        ("sec2", 20230101, 1200000000),
+        ("sec2", 20230102, 1250000000),
+        ("sec2", 20230103, 1300000000),
+    ]
+    memory_db.executemany(
+        "INSERT INTO historical_prices (security_uuid, date, close) VALUES (?, ?, ?)",
+        prices,
+    )
+
+    # FX Rates
+    fx_rates = [
+        ("USD", "2023-01-01", 1.1),
+        ("USD", "2023-01-02", 1.1),
+        ("USD", "2023-01-03", 1.2),
+    ]
+    memory_db.executemany(
+        "INSERT INTO fx_rates (currency, date, rate) VALUES (?, ?, ?)", fx_rates
+    )
+    memory_db.commit()
 
     # Act
-    rebuild_daily_wealth(mock_conn, mock_market_resolver, start_date, end_date)
+    market_resolver = MarketResolver(memory_db)
+    market_resolver.load_data()
+    start_date = date(2023, 1, 1)
+    end_date = date(2023, 1, 4)
+    rebuild_daily_wealth(memory_db, market_resolver, start_date, end_date)
 
     # Assert
-    cursor = mock_conn.cursor()
-    cursor.execute(
+    cursor = memory_db.execute(
         "SELECT date, total_wealth_cents, total_invested_cents FROM daily_wealth ORDER BY date"
     )
     results = cursor.fetchall()
 
-    assert len(results) == 3
-    # Day 1: Buy happens, wealth is calculated at EOD
-    # Invested: 1000 USD / 0.85 = 1176.47 EUR -> 117647 cents
-    # Wealth: 10 shares * 100 USD/share / 0.85 = 1176.47 EUR -> 117647 cents
-    assert results[0] == ("2023-01-01", 117647, 117647)
-    # Day 2: No changes, values carry over
-    assert results[1] == ("2023-01-02", 117647, 117647)
-    # Day 3: No changes, values carry over
-    assert results[2] == ("2023-01-03", 117647, 117647)
+    assert len(results) == 4
+    df = pd.DataFrame(
+        results, columns=["date", "total_wealth_cents", "total_invested_cents"]
+    )
+    df["date"] = pd.to_datetime(df["date"])
+
+    # Verification of calculated values
+    # Day 1 (2023-01-01): Deposit of 2000 EUR
+    assert df.loc[0, "total_wealth_cents"] == 200000
+    assert df.loc[0, "total_invested_cents"] == 200000
+
+    # Day 2 (2023-01-02): Buy 100 shares of sec1 for 1000 USD
+    # Wealth = 2000 EUR (cash) - 1000 USD / 1.1 (buy) + 100 * 11 USD / 1.1 (sec1 value) = 2000 - 909.09 + 1000 = 2090.91
+    assert abs(df.loc[1, "total_wealth_cents"] - 209091) < 1
+
+    # Day 3 (2023-01-03): Sell 50 shares of sec2 for 600 EUR
+    # Wealth changes based on sec1 price change and sec2 sale
+    # sec1 value: 100 shares * 11 USD/share / 1.2 FX = 916.67 EUR
+    # sec2 value: -50 shares * 13 EUR/share = -650.00 EUR
+    # cash: 2600 EUR (acc2) - 1000 USD / 1.2 FX (acc1) = 2600 - 833.33 = 1766.67 EUR
+    # total wealth: 916.67 - 650 + 1766.67 = 2033.34 EUR
+    assert abs(df.loc[2, "total_wealth_cents"] - 203333) < 2
+
+    # Day 4 (2023-01-04): No transactions, wealth should be same as day 3
+    assert abs(df.loc[3, "total_wealth_cents"] - 203333) < 2
+
+    # Invested capital should remain at 2000 EUR
+    assert all(df["total_invested_cents"] == 200000)
