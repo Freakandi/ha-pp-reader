@@ -34,12 +34,26 @@ class MarketResolver:
         """Initialize with a database connection."""
         self.conn = conn
         self._df_prices: pd.DataFrame = pd.DataFrame()
+        self._df_rates: pd.DataFrame = pd.DataFrame()
         self._df_securities: pd.DataFrame = pd.DataFrame()
         self._prices_idx: pd.DataFrame = pd.DataFrame()
         self._sec_curr_map: dict[str, str] = {}
 
+    def _load_fx_data(self) -> None:
+        """Load FX rates from the database into a DataFrame."""
+        query = "SELECT currency, date, rate FROM fx_rates"
+        try:
+            self._df_rates = pd.read_sql_query(query, self.conn)
+            self._df_rates["date"] = pd.to_datetime(
+                self._df_rates["date"], format="%Y-%m-%d"
+            ).dt.tz_localize("UTC")
+        except (pd.errors.DatabaseError, KeyError):
+            self._df_rates = pd.DataFrame(columns=["currency", "date", "rate"])
+
     def load_data(self) -> None:
         """Load reference data into memory."""
+        self._load_fx_data()
+
         # 1. Load Historical Prices
         query_hist = "SELECT security_uuid, date, close FROM historical_prices"
         try:
