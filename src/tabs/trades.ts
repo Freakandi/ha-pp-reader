@@ -209,7 +209,7 @@ function renderTradesTable(trades: readonly RealizedTrade[]): string {
     const priceTrend = priceDiff > 0 ? 'positive' : priceDiff < 0 ? 'negative' : 'neutral';
 
     const nameContent = escapeHtml(trade.name);
-    let nameCell = `<span class="trade-name-clickable" data-val="${nameContent}" data-security-uuid="${escapeAttribute(trade.security_uuid)}">${nameContent}</span>`;
+    let nameCell = `<span class="trade-name-clickable" role="button" tabindex="0" aria-label="Details für ${nameContent} anzeigen" data-val="${nameContent}" data-security-uuid="${escapeAttribute(trade.security_uuid)}">${nameContent}</span>`;
     if (trade.lots.length > 1) {
       nameCell = `
         <span class="expand-icon" role="button" tabindex="0" aria-label="Details anzeigen" aria-expanded="false" data-security-uuid="${escapeAttribute(trade.security_uuid)}">
