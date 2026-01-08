@@ -78,15 +78,15 @@ def _compute_security_metrics_sync(
                 price = market_resolver.get_price(sec_uuid, today)
                 currency = market_resolver.get_security_currency(sec_uuid)
                 fx_rate = market_resolver.get_fx(currency, today)
-                current_value = (quantity * price) / (fx_rate if fx_rate else 1.0)
+                current_value = (quantity * price) / fx_rate if fx_rate else 0.0
 
                 cost_basis = 0.0
                 if sec_uuid in active_lots:
                     for lot in active_lots[sec_uuid]:
                         cost_basis += (
-                            lot.shares
-                            * lot.price_native
-                            / (lot.fx_rate if lot.fx_rate else 1.0)
+                            lot.shares * lot.price_native / lot.fx_rate
+                            if lot.fx_rate
+                            else 0.0
                         )
 
                 unrealized_gain = current_value - cost_basis

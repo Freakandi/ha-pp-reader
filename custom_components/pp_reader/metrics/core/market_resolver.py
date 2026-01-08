@@ -141,11 +141,10 @@ class MarketResolver:
             pass  # Fall through to return 0.0
         return 0.0
 
-    def get_fx(self, currency: str, d: date | pd.Timestamp) -> float:
+    def get_fx(self, currency: str, d: date | pd.Timestamp) -> float | None:
         """Get the FX rate for a currency on a specific date. Delegates to fx_access."""
         iso_date = pd.Timestamp(d).strftime("%Y-%m-%d")
-        rate = get_best_available_fx_rate(self.conn, currency, iso_date)
-        return rate or 1.0
+        return get_best_available_fx_rate(self.conn, currency, iso_date)
 
     def get_security_currency(self, sec_uuid: str) -> str:
         """Get the currency code for a given security UUID."""

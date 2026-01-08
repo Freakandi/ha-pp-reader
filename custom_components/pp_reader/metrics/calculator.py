@@ -160,7 +160,7 @@ class PerformanceEngine:
             price = self.market_resolver.get_price(sec_uuid, valuation_ts)
             currency = self.market_resolver.get_security_currency(sec_uuid)
             fx_rate = self.market_resolver.get_fx(currency, valuation_ts)
-            value_eur = (quantity * price) / (fx_rate if fx_rate else 1.0)
+            value_eur = (quantity * price) / fx_rate if fx_rate else 0.0
             securities_wealth += value_eur
 
         # 2. Cash Wealth
@@ -173,7 +173,7 @@ class PerformanceEngine:
         if not cash_balances.empty:
             for (_acc_uuid, currency), balance in cash_balances.items():
                 fx_rate = self.market_resolver.get_fx(currency, valuation_ts)
-                value_eur = balance / (fx_rate if fx_rate else 1.0)
+                value_eur = balance / fx_rate if fx_rate else 0.0
                 cash_wealth += value_eur
 
         # 3. Invested Capital
@@ -258,7 +258,7 @@ class PerformanceEngine:
 
         return {acc: bal for acc, bal in inventory.items() if abs(bal) > _SHARE_EPSILON}
 
-    def _calculate_invested_capital(
+    def _calculate_invested_capital(  # noqa: PLR0912
         self,
         transactions: list[Transaction],
     ) -> float:
@@ -297,7 +297,7 @@ class PerformanceEngine:
                 tx_date = tx_date_map.get(tx_uuid)
                 if tx_date:
                     rate = self.market_resolver.get_fx(unit_row.currency_code, tx_date)
-                    unit_val_eur = (unit_row.amount / 100.0) / (rate if rate else 1.0)
+                    unit_val_eur = (unit_row.amount / 100.0) / rate if rate else 0.0
                     unit_sums_eur[tx_uuid] += unit_val_eur
 
         for tx in flow_txs:
@@ -316,11 +316,16 @@ class PerformanceEngine:
                 currency = self.market_resolver.get_security_currency(tx.security)
                 fx_rate = self.market_resolver.get_fx(currency, tx_ts)
                 value_eur = (abs(tx.shares) / 1e8 * price) / (
-                    fx_rate if fx_rate else 1.0
+                    fx_rate if fx_rate else 0.0
                 )
             elif tx.amount is not None:
-                fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_ts)
-                value_eur = (abs(tx.amount) / 100.0) / (fx_rate if fx_rate else 1.0)
+                # Priority 1: Use explicit transaction rate if available
+                if tx.fx_rate_used and tx.fx_rate_used > 0:
+                    fx_rate = tx.fx_rate_used
+                else:
+                    fx_rate = self.market_resolver.get_fx(tx.currency_code, tx_ts)
+
+                value_eur = (abs(tx.amount) / 100.0) / fx_rate if fx_rate else 0.0
 
             # Gross up the value with associated fees/taxes only for Inflows
             if sign > 0:
@@ -342,7 +347,7 @@ class PerformanceEngine:
         "today" are up-to-date.
         """
         # transactions
-        query_txs = "SELECT uuid, type, date, account, other_account, portfolio, other_portfolio, security, shares, amount, currency_code FROM transactions ORDER BY date"  # noqa: E501
+        query_txs = "SELECT uuid, type, date, account, other_account, portfolio, other_portfolio, security, shares, amount, currency_code, fx_rate_used FROM transactions ORDER BY date"  # noqa: E501
         try:
             self._df_txs = pd.read_sql_query(query_txs, self.conn, parse_dates=["date"])
         except pd.errors.DatabaseError:
@@ -359,6 +364,7 @@ class PerformanceEngine:
                     "shares",
                     "amount",
                     "currency_code",
+                    "fx_rate_used",
                 ]
             )
 
@@ -439,7 +445,7 @@ class PerformanceEngine:
             curr = self.market_resolver.get_security_currency(sec_uuid)
             rate = self._get_fx(curr, basis_ts)
 
-            val_eur = (qty * price) / (rate if rate else 1.0)
+            val_eur = (qty * price) / (rate if rate else 0.0)
             sec_wealth += val_eur
 
         # 2. Cash Wealth
@@ -450,7 +456,7 @@ class PerformanceEngine:
         for (_acc_id, curr), bal in balances.items():
             # Use basis_ts (T-1) for FX
             rate = self._get_fx(curr, basis_ts)
-            val_eur = bal / (rate if rate else 1.0)
+            val_eur = bal / (rate if rate else 0.0)
             cash_wealth += val_eur
 
         return {
@@ -1092,7 +1098,15 @@ class PerformanceEngine:
         else:
             price_native = (net_amount / 100.0) / shares if shares > 0 else 0.0
 
-        fx_rate = self.market_resolver.get_fx(tx_row.currency_code, tx_date)
+            price_native = (net_amount / 100.0) / shares if shares > 0 else 0.0
+
+        # Priority 1: Use explicitly recorded FX rate for this transaction
+        explicit_rate = getattr(tx_row, "fx_rate_used", None)
+        if explicit_rate and explicit_rate > 0:
+            fx_rate = explicit_rate
+        else:
+            # Priority 2: Use MarketResolver (Date-specific or lookback)
+            fx_rate = self.market_resolver.get_fx(tx_row.currency_code, tx_date)
 
         if sec_id not in inventory:
             inventory[sec_id] = deque()
@@ -1388,8 +1402,14 @@ class PerformanceEngine:
         # Use itertuples for performance over iterrows
         for row in df_out.itertuples(index=False):
             # FX Rate Lookup
-            currency = getattr(row, "currency_code", "EUR")
-            rates.append(self._get_fx(currency, row.date))
+            # Priority 1: Use explicit transaction rate if available and valid
+            tx_rate = getattr(row, "fx_rate_used", None)
+            if tx_rate and tx_rate > 0:
+                rates.append(tx_rate)
+            else:
+                # Priority 2 & 3: Market/ECB Rate (fallback logic in MarketResolver)
+                currency = getattr(row, "currency_code", "EUR")
+                rates.append(self._get_fx(currency, row.date) or 0.0)
 
             # Price Lookup (only if security is present)
             security = getattr(row, "security", None)
@@ -1501,7 +1521,7 @@ class PerformanceEngine:
                     d = u_row.date
                     # Use _get_fx to ensure precision matching
                     r = self._get_fx(u_row.currency_code, d)
-                    u_val = (u_row.amount / 100.0) / (r if r else 1.0)
+                    u_val = (u_row.amount / 100.0) / (r if r else 0.0)
                     unit_sums[d] = unit_sums.get(d, 0.0) + u_val
 
                 if unit_sums:
@@ -1712,7 +1732,7 @@ class PerformanceEngine:
     def _get_price(self, sec_id: str, d: pd.Timestamp) -> float:
         return self.market_resolver.get_price(sec_id, d)
 
-    def _get_fx(self, curr: str, d: pd.Timestamp) -> float:
+    def _get_fx(self, curr: str, d: pd.Timestamp) -> float | None:
         return self.market_resolver.get_fx(curr, d)
 
     def _load_transaction_units(self, tx_uuids: list[str]) -> dict[str, dict[str, int]]:

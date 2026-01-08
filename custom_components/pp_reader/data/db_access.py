@@ -177,6 +177,7 @@ class Transaction:
     fx_amount: int | None = None
     fx_currency_code: str | None = None
     fx_rate_to_base: float | None = None
+    fx_rate_used: float | None = None
 
 
 @dataclass
@@ -544,7 +545,8 @@ def get_transactions(
                     ELSE 0 END), 0) AS INTEGER) as taxes,
                 MAX(ufx.fx_amount) as fx_amount,
                 MAX(ufx.fx_currency_code) as fx_currency_code,
-                MAX(ufx.fx_rate_to_base) as fx_rate_to_base
+                MAX(ufx.fx_rate_to_base) as fx_rate_to_base,
+                t.fx_rate_used
         FROM transactions t
         LEFT JOIN transaction_units u ON t.uuid = u.transaction_uuid
             AND u.type IN (1, 2, 11, 12, 13, 14)
@@ -588,6 +590,7 @@ def get_transactions(
             fx_amount=row[13],
             fx_currency_code=row[14],
             fx_rate_to_base=row[15],
+            fx_rate_used=row[16],
         )
         for row in rows
     ]

@@ -7,6 +7,11 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ## [Unreleased]
 
 ### Fixed
+- **FX Valuation (Historical)**: Permanently resolved "ridiculous numbers" in historical valuations (Purchase Value, Invested Capital) by prioritizing the transaction's stored FX rate (`fx_rate_used`) over global daily rates. This fixes spikes caused by missing historical daily data.
+- **FX Fallback Logic**: Removed the "future fallback" mechanism that incorrectly used 2026 rates for 2025 transactions, ensuring strictly chronological rate resolution.
+- **Missing Data Safety**: Systems using daily FX lookups for valuation now default to 0.0 EUR instead of 1.0 (1:1 conversion) when no valid rate exists, preventing massive overvaluation of foreign assets (e.g. JPY).
+
+### Fixed
 - **Metric Engine Crash**: Resolved a critical failure in the metric calculation pipeline (`Metric run failed`) caused by inconsistent date formats in the `securities` table (`last_price_date`). Normalized all price dates to Unix timestamps (seconds) to prevent overflow errors.
 - **Negative Zero Display**: Fixed cosmetic issue where zero fees and taxes appeared as `-0.00 €` in the performance breakdown.
 - **FX Valuation Logic**: Unified FX rate lookups across flow and valuation calculations, removing `merge_asof` dependency to resolve summation mismatches.
