@@ -29,6 +29,9 @@ export interface TableOptions {
 
 export type TableRow = Record<string, unknown>;
 
+// Material Design Arrow Drop Up
+const SORT_ICON = `<svg class="sort-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>`;
+
 const resolveRoundedTrend = (
   numericValue: number,
   decimals: number,
@@ -248,6 +251,9 @@ export function makeTable(
     // Falls sortable: th data-sort-key setzen (nur wenn key vorhanden)
     if (sortable && c.key) {
       const sortLabel = `${escapeAttribute(c.label)} sortieren`;
+      // Note: We don't append SORT_ICON here because c.label usually already comes from createSimpleSortHeader
+      // which includes the icon. If makeTable is used with plain text labels + sortable=true,
+      // we might want to add it, but currently consumers use the helpers.
       html += `<th${alignClass} data-sort-key="${c.key}" role="button" tabindex="0" aria-sort="none" aria-label="${sortLabel}" data-label="${escapeAttribute(c.label)}">${c.label}</th>`;
     } else {
       html += `<th${alignClass}>${c.label}</th>`;
@@ -568,14 +574,14 @@ export function createSortHeader(
 ): string {
   return `
     <div class="sort-stack">
-        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" data-label="${escapeHtml(labelTop)}" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}</span>
-        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0" data-label="${escapeHtml(labelBottom)}" aria-label="${escapeHtml(labelBottom)} sortieren">${escapeHtml(labelBottom)}</span>
+        <span class="sort-item" data-sort-selector="${selectorTop}" role="button" tabindex="0" data-label="${escapeHtml(labelTop)}" aria-label="${escapeHtml(labelTop)} sortieren">${escapeHtml(labelTop)}${SORT_ICON}</span>
+        <span class="sort-item" data-sort-selector="${selectorBottom}" role="button" tabindex="0" data-label="${escapeHtml(labelBottom)}" aria-label="${escapeHtml(labelBottom)} sortieren">${escapeHtml(labelBottom)}${SORT_ICON}</span>
     </div>
   `;
 }
 
 export function createSimpleSortHeader(label: string, key: string): string {
-  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" data-label="${escapeHtml(label)}" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}</span>`;
+  return `<span class="simple-sort-header" data-sort-key="${key}" role="button" tabindex="0" data-label="${escapeHtml(label)}" aria-label="${escapeHtml(label)} sortieren">${escapeHtml(label)}${SORT_ICON}</span>`;
 }
 
 /**
