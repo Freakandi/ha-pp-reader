@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 
 if TYPE_CHECKING:
@@ -37,6 +38,9 @@ class MarketResolver:
         self._df_rates: pd.DataFrame = pd.DataFrame()
         self._df_securities: pd.DataFrame = pd.DataFrame()
         self._prices_idx: pd.DataFrame = pd.DataFrame()
+        self._rates_idx: pd.DataFrame = pd.DataFrame()
+        # Fast lookup cache: currency -> (dates_array, rates_array)
+        self._fx_cache: dict[str, tuple[np.ndarray, np.ndarray]] = {}
         self._sec_curr_map: dict[str, str] = {}
 
     def _load_fx_data(self) -> None:
@@ -49,6 +53,19 @@ class MarketResolver:
             ).dt.tz_localize("UTC")
         except (pd.errors.DatabaseError, KeyError):
             self._df_rates = pd.DataFrame(columns=["currency", "date", "rate"])
+
+        if not self._df_rates.empty:
+            # Sort and index for fast lookup
+            self._df_rates = self._df_rates.sort_values("date")
+            # Build fast numpy cache
+            # We convert dates to int64 (nanoseconds) for blazing fast searchsorted
+            for curr, group in self._df_rates.groupby("currency"):
+                self._fx_cache[curr] = (
+                    group["date"].astype(np.int64).to_numpy(),
+                    group["rate"].to_numpy(dtype=float),
+                )
+        else:
+            self._fx_cache = {}
 
     def load_data(self) -> None:
         """Load reference data into memory."""
@@ -142,8 +159,33 @@ class MarketResolver:
         return 0.0
 
     def get_fx(self, currency: str, d: date | pd.Timestamp) -> float | None:
-        """Get the FX rate for a currency on a specific date. Delegates to fx_access."""
-        iso_date = pd.Timestamp(d).strftime("%Y-%m-%d")
+        """
+        Get the FX rate for a currency on a specific date using in-memory data.
+
+        Prioritizes in-memory lookup using numpy arrays for speed.
+        """
+        if not currency or currency == "EUR":
+            return 1.0
+
+        ts = pd.Timestamp(d)
+        ts = ts.tz_localize("UTC") if ts.tzinfo is None else ts.tz_convert("UTC")
+
+        # Fast Numpy Lookup
+        cache = self._fx_cache.get(currency)
+        if cache:
+            dates, rates = cache
+            # Use int64 comparison for speed
+            ts_val = ts.value
+            # side='right' finds the index where ts would be inserted to maintain order.
+            # We want the last date <= ts, which is index - 1.
+            idx = np.searchsorted(dates, ts_val, side="right")
+            if idx > 0:
+                return float(rates[idx - 1])
+            # If idx == 0, it means the requested date is before all known dates.
+            # Fallback to DB or return None.
+
+        # Fallback to DB (Legacy behavior)
+        iso_date = ts.strftime("%Y-%m-%d")
         return get_best_available_fx_rate(self.conn, currency, iso_date)
 
     def get_security_currency(self, sec_uuid: str) -> str:
