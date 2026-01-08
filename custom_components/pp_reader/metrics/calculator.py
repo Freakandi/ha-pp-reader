@@ -749,6 +749,15 @@ class PerformanceEngine:
         # a. Capital Gains (Realized and Unrealized)
         virtual_inventory, _, basis_ts = self._setup_virtual_inventory(start_date)
 
+        # Augment transactions with fees/taxes for accurate Cost Basis/Proceeds
+        tx_uuids = [tx.uuid for tx in transactions_in_period]
+        units_payload = self._load_transaction_units(tx_uuids)
+        for tx in transactions_in_period:
+            if tx.uuid in units_payload:
+                payload = units_payload[tx.uuid]
+                tx.fees = payload.get("fees", 0)
+                tx.taxes = payload.get("taxes", 0)
+
         realized, unrealized = self._calculate_capital_gains(
             transactions_in_period,
             start_date,

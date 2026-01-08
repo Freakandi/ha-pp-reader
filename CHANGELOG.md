@@ -7,6 +7,8 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ## [Unreleased]
 
 ### Fixed
+- **Day Change Logic**: Resolved critical regression where portfolio and position day-change values appeared as zero. The metrics engine now correctly prioritizes the current live price timestamp over start-of-day timestamps, ensuring the latest intra-day price updates are used for calculations. Validated with regression tests.
+- **Test Suite**: Fixed `PerformanceEngine` instantiation issues in unit tests (`test_calculator_kpi.py`) and updated test schemas (`test_period_calculations.py`) to prevent false positives and verify the engine's integrity.
 - **FX Valuation (Historical)**: Permanently resolved "ridiculous numbers" in historical valuations (Purchase Value, Invested Capital) by prioritizing the transaction's stored FX rate (`fx_rate_used`) over global daily rates. This fixes spikes caused by missing historical daily data.
 - **FX Fallback Logic**: Removed the "future fallback" mechanism that incorrectly used 2026 rates for 2025 transactions, ensuring strictly chronological rate resolution.
 - **Missing Data Safety**: Systems using daily FX lookups for valuation now default to 0.0 EUR instead of 1.0 (1:1 conversion) when no valid rate exists, preventing massive overvaluation of foreign assets (e.g. JPY).

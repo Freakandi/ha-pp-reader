@@ -2,9 +2,10 @@ import datetime
 import sqlite3
 
 import pytest
-from custom_components.pp_reader.backdating.engine_pandas import TransactionType
 
+from custom_components.pp_reader.const import TransactionType
 from custom_components.pp_reader.metrics.calculator import PerformanceEngine
+from custom_components.pp_reader.metrics.core.market_resolver import MarketResolver
 
 
 @pytest.fixture
@@ -24,7 +25,10 @@ def test_db(tmp_path):
         currency_code TEXT,
         amount INTEGER,
         shares INTEGER,
-        security TEXT
+        security TEXT,
+        portfolio TEXT,
+        other_portfolio TEXT,
+        fx_rate_used REAL
     );
     """)
 
@@ -152,20 +156,23 @@ def test_realized_gains_calculation_gross_not_double_counted(test_db):
     )  # Tax (Type 1 is Tax)
 
     # Add historical price for the start date to allow virtual lot creation
+    # MarketResolver expects days since epoch for historical_prices
+    epoch_day_1 = (datetime.date(2025, 1, 1) - datetime.date(1970, 1, 1)).days
     cur.execute(
         """
         INSERT INTO historical_prices (security_uuid, date, close)
         VALUES (?, ?, ?)
         """,
-        (sec_uuid, 20250101, 10500000000),  # 105 EUR
+        (sec_uuid, epoch_day_1, 10500000000),  # 105 EUR
     )
     # Add historical price for the new start date to test virtual lot creation
+    epoch_day_2 = (datetime.date(2025, 1, 2) - datetime.date(1970, 1, 1)).days
     cur.execute(
         """
         INSERT INTO historical_prices (security_uuid, date, close)
         VALUES (?, ?, ?)
         """,
-        (sec_uuid, 20250102, 11000000000),  # 110 EUR
+        (sec_uuid, epoch_day_2, 11000000000),  # 110 EUR
     )
 
     conn.commit()
@@ -175,8 +182,12 @@ def test_realized_gains_calculation_gross_not_double_counted(test_db):
     start_date = datetime.date(2025, 1, 2)
     end_date = datetime.date(2025, 1, 3)
 
-    engine = PerformanceEngine(sqlite3.connect(test_db))
+    conn_read = sqlite3.connect(test_db)
+    market_resolver = MarketResolver(conn_read)
+    market_resolver.load_data()
+    engine = PerformanceEngine(conn_read, market_resolver)
     engine.load_data()
+
     results = engine.calculate_period_performance(start_date, end_date)
 
     # Expected Realized Gain = Gross Proceeds (120) - Virtual Cost Basis (105) = 15.0

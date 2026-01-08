@@ -75,9 +75,10 @@ def _compute_security_metrics_sync(
             active_lots = engine.get_fifo_active_lots(scope_uuid=p_uuid)
 
             for sec_uuid, quantity in holdings.items():
-                price = market_resolver.get_price(sec_uuid, today)
+                now_ts = datetime.now(UTC)
+                price = market_resolver.get_price(sec_uuid, now_ts)
                 currency = market_resolver.get_security_currency(sec_uuid)
-                fx_rate = market_resolver.get_fx(currency, today)
+                fx_rate = market_resolver.get_fx(currency, now_ts)
                 current_value = (quantity * price) / fx_rate if fx_rate else 0.0
 
                 cost_basis = 0.0
@@ -118,7 +119,9 @@ def _compute_security_metrics_sync(
                         day_change_pct=None,
                         day_change_source=None,
                         day_change_coverage=None,
-                        last_price_native_raw=None,
+                        last_price_native_raw=int(price * EIGHT_DECIMAL_SCALE)
+                        if price
+                        else None,
                         last_close_native_raw=None,
                     )
                 )
