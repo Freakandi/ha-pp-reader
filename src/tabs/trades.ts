@@ -56,18 +56,31 @@ const STYLES = `
     font-weight: bold;
     color: var(--primary-color);
   }
-  .sort-item.sort-active::after {
-    content: " ↕"; /* Default neutral arrow */
-    font-size: 0.8em;
-    opacity: 0.5;
+
+  /* SVG Icon Styles */
+  .sort-icon {
+    width: 16px;
+    height: 16px;
+    fill: currentColor;
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 2px;
+    opacity: 0;
+    transition: opacity 0.2s, transform 0.2s;
   }
-  .sort-item.sort-active.dir-asc::after {
-    content: " ▲";
+  .sort-active .sort-icon {
     opacity: 1;
   }
-  .sort-item.sort-active.dir-desc::after {
-    content: " ▼";
-    opacity: 1;
+  .sort-active.dir-desc .sort-icon {
+    transform: rotate(180deg);
+  }
+  .sort-item:hover .sort-icon,
+  .simple-sort-header:hover .sort-icon {
+      opacity: 0.5;
+  }
+  .sort-item.sort-active:hover .sort-icon,
+  .simple-sort-header.sort-active:hover .sort-icon {
+      opacity: 1;
   }
 
   .simple-sort-header {
@@ -85,8 +98,6 @@ const STYLES = `
      font-weight: bold;
      color: var(--primary-color);
   }
-  .simple-sort-header.sort-active.dir-asc::after { content: " ▲"; }
-  .simple-sort-header.sort-active.dir-desc::after { content: " ▼"; }
 
 
   .cell-stack {
