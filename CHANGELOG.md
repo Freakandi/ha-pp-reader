@@ -7,6 +7,7 @@ Versioning: SemVer (minor bump for new functionality without breaking changes).
 ## [Unreleased]
 
 ### Fixed
+- **Metric Engine Crash**: Resolved a critical failure in the metric calculation pipeline (`Metric run failed`) caused by inconsistent date formats in the `securities` table (`last_price_date`). Normalized all price dates to Unix timestamps (seconds) to prevent overflow errors.
 - **Negative Zero Display**: Fixed cosmetic issue where zero fees and taxes appeared as `-0.00 €` in the performance breakdown.
 - **FX Valuation Logic**: Unified FX rate lookups across flow and valuation calculations, removing `merge_asof` dependency to resolve summation mismatches.
 - **EOD Valuation**: Adjusted timestamp logic to correctly capture price changes occurring on the final day of a reporting period.

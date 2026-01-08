@@ -60,7 +60,7 @@ class MarketResolver:
             df_hist = pd.read_sql_query(query_hist, self.conn)
             # Safe date conversion
             df_hist["date"] = pd.to_datetime(
-                df_hist["date"].astype(str), format="%Y%m%d"
+                df_hist["date"], unit="D", origin="unix"
             ).dt.tz_localize("UTC")
             df_hist["close"] = df_hist["close"] / PRICE_SCALE
             df_hist = df_hist[["security_uuid", "date", "close"]]
@@ -74,7 +74,7 @@ class MarketResolver:
 
             if not df_latest.empty:
                 df_latest["date"] = pd.to_datetime(
-                    df_latest["last_price_date"], unit="D", origin="unix"
+                    df_latest["last_price_date"], unit="s", origin="unix"
                 ).dt.tz_localize("UTC")
                 df_latest["close"] = df_latest["last_price"] / PRICE_SCALE
                 df_latest["security_uuid"] = df_latest["uuid"]

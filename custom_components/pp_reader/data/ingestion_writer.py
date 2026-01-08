@@ -9,7 +9,7 @@ import sqlite3
 from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import UTC
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -28,8 +28,6 @@ from custom_components.pp_reader.util.currency import (
 from .db_init import clear_ingestion_stage, ensure_ingestion_tables
 
 if TYPE_CHECKING:
-    from datetime import datetime
-
     from custom_components.pp_reader.models import parsed as parsed_models
 else:  # pragma: no cover - runtime fallback for typing only
     parsed_models = None  # type: ignore[assignment]
@@ -57,6 +55,20 @@ def _to_iso(dt: datetime | None) -> str | None:
     if dt.tzinfo is None:
         return dt.isoformat()
     return dt.astimezone(UTC).isoformat()
+
+
+def _to_timestamp(value: Any) -> int | None:
+    """Normalize a date/datetime to a Unix timestamp (seconds)."""
+    if value in (None, ""):
+        return None
+    if isinstance(value, (int, float)):
+        return int(value)
+    if hasattr(value, "timestamp"):  # datetime
+        return int(value.timestamp())
+    if hasattr(value, "timetuple"):  # date
+        # Convert date to midnight UTC timestamp
+        return int(datetime.combine(value, datetime.min.time(), tzinfo=UTC).timestamp())
+    return None
 
 
 def _json_dump(value: Mapping[str, Any] | None) -> str | None:
@@ -470,7 +482,7 @@ class IngestionWriter:
                     security.feed_url,
                     security.latest_feed,
                     security.latest_feed_url,
-                    latest.date if latest else None,
+                    _to_timestamp(latest.date) if latest else None,
                     latest.close if latest else None,
                     latest.high if latest else None,
                     latest.low if latest else None,

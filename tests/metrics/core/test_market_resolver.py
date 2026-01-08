@@ -47,23 +47,46 @@ def db_connection():
     """
     )
 
-    # Calculate EPOCH days for clarity
-    # 2022-01-07
-    ts_jan7 = (datetime(2022, 1, 7, tzinfo=UTC) - datetime(1970, 1, 1, tzinfo=UTC)).days
+    # Calculate EPOCH days (for historical_prices) and seconds (for securities live price)
+    base_date = datetime(1970, 1, 1, tzinfo=UTC)
 
-    # 2022-01-09
-    ts_jan9 = (datetime(2022, 1, 9, tzinfo=UTC) - datetime(1970, 1, 1, tzinfo=UTC)).days
+    # Days
+    ts_jan5_days = (datetime(2022, 1, 5, tzinfo=UTC) - base_date).days
+    ts_jan6_days = (datetime(2022, 1, 6, tzinfo=UTC) - base_date).days
+    ts_jan7_days = (datetime(2022, 1, 7, tzinfo=UTC) - base_date).days
+    ts_jan8_days = (datetime(2022, 1, 8, tzinfo=UTC) - base_date).days
+
+    # Seconds
+    ts_jan7_sec = int(datetime(2022, 1, 7, tzinfo=UTC).timestamp())
+    ts_jan9_sec = int(datetime(2022, 1, 9, tzinfo=UTC).timestamp())
+
     # Insert test data
     securities_data = [
-        ("sec_a", "Security A", "USD", 155 * PRICE_SCALE, ts_jan7),  # Live: 2022-01-07
+        (
+            "sec_a",
+            "Security A",
+            "USD",
+            155 * PRICE_SCALE,
+            ts_jan7_sec,
+        ),  # Live: 2022-01-07
         ("sec_b", "Security B", "EUR", None, None),
-        ("sec_c", "Security C", "GBP", 210 * PRICE_SCALE, ts_jan9),  # Live: 2022-01-09
+        (
+            "sec_c",
+            "Security C",
+            "GBP",
+            210 * PRICE_SCALE,
+            ts_jan9_sec,
+        ),  # Live: 2022-01-09
     ]
     historical_prices_data = [
-        ("sec_a", 20220105, 150 * PRICE_SCALE),  # Jan 5
-        ("sec_a", 20220106, 152 * PRICE_SCALE),  # Jan 6
-        ("sec_a", 20220107, 153 * PRICE_SCALE),  # Jan 7 (Should be overridden by Live)
-        ("sec_c", 20220108, 200 * PRICE_SCALE),  # Jan 8
+        ("sec_a", ts_jan5_days, 150 * PRICE_SCALE),  # Jan 5
+        ("sec_a", ts_jan6_days, 152 * PRICE_SCALE),  # Jan 6
+        (
+            "sec_a",
+            ts_jan7_days,
+            153 * PRICE_SCALE,
+        ),  # Jan 7 (Should be overridden by Live)
+        ("sec_c", ts_jan8_days, 200 * PRICE_SCALE),  # Jan 8
     ]
     fx_rates_data = [
         ("2022-01-05", "USD", 1.2),
@@ -136,3 +159,31 @@ def test_fx_lookup(db_connection):
     assert resolver.get_fx("USD", date(2022, 1, 6)) == pytest.approx(1.21)
     assert resolver.get_fx("USD", date(2022, 1, 7)) == pytest.approx(1.21)
     assert resolver.get_fx("JPY", date(2022, 1, 5)) == 1.0
+
+
+def test_timestamp_handling(db_connection):
+    """Test that the resolver handles Unix timestamps (seconds) correctly."""
+    cursor = db_connection.cursor()
+
+    # 2022-01-10 in seconds
+    ts_seconds_1 = int(datetime(2022, 1, 10, tzinfo=UTC).timestamp())
+    # 2022-01-11 in seconds
+    ts_seconds_2 = int(datetime(2022, 1, 11, tzinfo=UTC).timestamp())
+
+    data = [
+        ("sec_1", "Security 1", "USD", 160 * PRICE_SCALE, ts_seconds_1),
+        ("sec_2", "Security 2", "USD", 170 * PRICE_SCALE, ts_seconds_2),
+    ]
+    cursor.executemany("INSERT OR REPLACE INTO securities VALUES (?, ?, ?, ?, ?)", data)
+    db_connection.commit()
+
+    resolver = MarketResolver(db_connection)
+    resolver.load_data()
+
+    # Check seconds-based price
+    price_1 = resolver.get_price("sec_1", date(2022, 1, 10))
+    assert price_1 == pytest.approx(160.0)
+
+    # Check seconds-based price
+    price_2 = resolver.get_price("sec_2", date(2022, 1, 11))
+    assert price_2 == pytest.approx(170.0)
