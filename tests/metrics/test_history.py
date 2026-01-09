@@ -24,6 +24,11 @@ def memory_db() -> sqlite3.Connection:
     return conn
 
 
+def _to_epoch_day(d_str: str) -> int:
+    d = date.fromisoformat(d_str)
+    return (d - date(1970, 1, 1)).days
+
+
 def test_rebuild_daily_wealth_vectorized(memory_db: sqlite3.Connection) -> None:
     """Test the vectorized rebuild_daily_wealth function with a simple scenario."""
     # Arrange: Populate the database with sample data
@@ -91,11 +96,12 @@ def test_rebuild_daily_wealth_vectorized(memory_db: sqlite3.Connection) -> None:
     )
 
     # Prices
+    # Convert dates to epoch days as expected by schema/MarketResolver
     prices = [
-        ("sec1", 20230102, 1100000000),
-        ("sec2", 20230101, 1200000000),
-        ("sec2", 20230102, 1250000000),
-        ("sec2", 20230103, 1300000000),
+        ("sec1", _to_epoch_day("2023-01-02"), 1100000000),
+        ("sec2", _to_epoch_day("2023-01-01"), 1200000000),
+        ("sec2", _to_epoch_day("2023-01-02"), 1250000000),
+        ("sec2", _to_epoch_day("2023-01-03"), 1300000000),
     ]
     memory_db.executemany(
         "INSERT INTO historical_prices (security_uuid, date, close) VALUES (?, ?, ?)",
