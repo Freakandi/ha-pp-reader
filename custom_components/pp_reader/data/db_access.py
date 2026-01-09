@@ -3232,12 +3232,15 @@ def _aggregate_portfolio_day_change(
         if holdings <= 0:
             continue
 
-        per_share_delta = _safe_float(row["day_change_eur"])
-        if per_share_delta is None:
+        # day_change_eur in security_metrics is the TOTAL change for the position
+        # (not per share)
+        position_change_eur = _safe_float(row["day_change_eur"])
+        if position_change_eur is None:
             rows_missing_change += 1
             continue
 
-        delta_eur = round_currency(per_share_delta * holdings, default=None)
+        # We assume day_change_eur is already properly rounded or close enough
+        delta_eur = round_currency(position_change_eur, default=None)
         if delta_eur is None:
             rows_missing_change += 1
             continue

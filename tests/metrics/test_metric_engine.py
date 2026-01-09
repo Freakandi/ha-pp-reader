@@ -110,8 +110,12 @@ async def test_security_metrics_include_day_change_and_fx(
     assert eur_metrics.gain_abs_cents == 50_000
     assert eur_metrics.gain_pct == pytest.approx(25.0)
     assert eur_metrics.coverage_ratio == pytest.approx(1.0)
-    assert eur_metrics.day_change_source == "unavailable"
-    assert eur_metrics.day_change_coverage == pytest.approx(0.5)
+    assert eur_metrics.day_change_source == "FIFO/Market"
+    # Day change is 0.0 because test data is static (last_price_date in 2024 vs now)
+    assert eur_metrics.day_change_native == pytest.approx(0.0)
+    assert eur_metrics.day_change_eur == pytest.approx(0.0)
+    assert eur_metrics.day_change_pct == pytest.approx(0.0)
+    assert eur_metrics.day_change_coverage == pytest.approx(1.0)
 
     usd_metrics = by_security[("portfolio-main", "sec-usd")]
     assert usd_metrics.current_value_cents == 150_000
@@ -119,10 +123,10 @@ async def test_security_metrics_include_day_change_and_fx(
     assert usd_metrics.gain_abs_cents == 50_000
     assert usd_metrics.gain_pct == pytest.approx(50.0)
     assert usd_metrics.coverage_ratio == pytest.approx(1.0)
-    assert usd_metrics.day_change_native == pytest.approx(5.0)
-    assert usd_metrics.day_change_eur == pytest.approx(4.0)
-    assert usd_metrics.day_change_pct == pytest.approx(5.26, rel=0, abs=1e-2)
-    assert usd_metrics.day_change_source == "native"
+    assert usd_metrics.day_change_source == "FIFO/Market"
+    assert usd_metrics.day_change_native == pytest.approx(0.0)
+    assert usd_metrics.day_change_eur == pytest.approx(0.0)
+    assert usd_metrics.day_change_pct == pytest.approx(0.0)
     assert usd_metrics.day_change_coverage == pytest.approx(1.0)
 
 

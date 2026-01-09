@@ -70,7 +70,7 @@ def seed_metrics_database(db_path: Path) -> None:
                     "Euro Equity",
                     "EUEQ",
                     "EUR",
-                    round(105.25 * 1e8),
+                    round(500.00 * 1e8),
                     1_704_153_600,
                 ),
                 (
@@ -78,7 +78,7 @@ def seed_metrics_database(db_path: Path) -> None:
                     "US Tech",
                     "USTK",
                     "USD",
-                    round(100.00 * 1e8),
+                    round(937.50 * 1e8),
                     1_704_153_600,
                 ),
             ],
@@ -123,7 +123,49 @@ def seed_metrics_database(db_path: Path) -> None:
             VALUES (?, ?, ?)
             """,
             [
-                ("sec-usd", 20240101, round(95.00 * 1e8)),
+                ("sec-usd", 19723, round(95.00 * 1e8)),
+            ],
+        )
+        conn.executemany(
+            """
+            INSERT INTO transactions (
+                uuid, type, date, account, portfolio, security, shares, amount, currency_code
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            [
+                (
+                    "tx-eur",
+                    0,  # TransactionType.BUY
+                    "2023-01-01T10:00:00",
+                    "acct-eur",
+                    "portfolio-main",
+                    "sec-eur",
+                    500_000_000,  # 5.0 shares
+                    200_000,  # 2000.00 EUR
+                    "EUR",
+                ),
+                (
+                    "tx-usd",
+                    0,  # TransactionType.BUY
+                    "2023-01-01T10:00:00",
+                    "acct-usd",
+                    "portfolio-main",
+                    "sec-usd",
+                    200_000_000,  # 2.0 shares
+                    125_000,  # 1250.00 USD (at 1.25 -> 1000 EUR)
+                    "USD",
+                ),
+            ],
+        )
+        conn.executemany(
+            """
+            INSERT INTO fx_rates (currency, date, rate)
+            VALUES (?, ?, ?)
+            """,
+            [
+                ("USD", "2023-01-01", 1.25),
+                ("USD", "2024-01-01", 1.25),
             ],
         )
         conn.commit()

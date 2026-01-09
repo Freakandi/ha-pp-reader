@@ -15,7 +15,7 @@ Restore the missing "Day Change" and "Previous Close" values in the portfolio da
 
 ## Refined Implementation Steps
 
-1.  [ ] **Modify `custom_components/pp_reader/metrics/securities.py`** (Function `_compute_security_metrics_sync`):
+1.  [x] **Modify `custom_components/pp_reader/metrics/securities.py`** (Function `_compute_security_metrics_sync`):
     *   **Action**: Update the iteration logic to calculating previous day's metrics.
     *   **Logic**:
         *   Define `prev_date = now_ts - timedelta(days=1)` inside the loop.
@@ -35,11 +35,11 @@ Restore the missing "Day Change" and "Previous Close" values in the portfolio da
         *   `day_change_coverage=1.0` (since we have full resolution)
         *   `last_close_native_raw=last_close_native_raw`
 
-2.  [ ] **Verify Correctness**:
+2.  [x] **Verify Correctness**:
     *   **Definition Verification**: Ensure the code strictly implements `Delta = (Current_Price - Previous_Price)`.
     *   **FX Handling**: Ensure the EUR calculation accounts for FX rate shifts: `Day_Change_EUR = (Current_Price_Native / Current_FX) - (Prev_Price_Native / Prev_FX)`. This correctly captures both price change and currency fluctuation.
 
-3.  [ ] **Lint & Test**:
+3.  [x] **Lint & Test**:
     *   Run `ruff check .` and `ruff format .`
     *   Run `npm run test` (if applicable, though this is backend).
     *   Run `pytest tests/metrics` to ensure no regression in calculation stability.
