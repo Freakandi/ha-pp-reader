@@ -97,9 +97,11 @@ describe("updatePortfolioFooterFromDom", () => {
       assert(outerFooter, "Outer footer should be found as a direct child of tbody");
 
       const outerFooterCell1 = outerFooter.querySelector("td:nth-child(1)");
+      assert(outerFooterCell1, "First cell of outer footer should exist");
       assert.strictEqual(outerFooterCell1.textContent.trim(), "Summe", "Outer footer should be updated with 'Summe'");
 
       const outerFooterCell2 = outerFooter.querySelector("td:nth-child(2)");
+      assert(outerFooterCell2, "Second cell of outer footer should exist");
       assert.strictEqual(outerFooterCell2.textContent.trim(), "15", "Position count should be summed correctly");
 
       const outerFooterCell5 = outerFooter.querySelector("td:nth-child(5)");
