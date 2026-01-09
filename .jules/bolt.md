@@ -21,3 +21,7 @@
 ## 2025-03-04 - [Vectorized FX Lookups in Loops]
 **Learning:** `PerformanceEngine` was using iterative `searchsorted` (via `_get_fx`) inside transaction loops to find exchange rates. This is O(N log M) or worse.
 **Action:** Implemented `pd.merge_asof` (O(N + M)) to pre-calculate and attach FX rates to all transactions before looping. This reduced execution time by ~50x (11.8s -> 0.23s) in benchmarks for 50k transactions. Critical details: explicit string casting for join keys and handling `direction='backward'`.
+
+## 2025-03-05 - [Vectorized Invested Capital Calculation]
+**Learning:** `_calculate_daily_invested_capital` was using `iterrows()` to loop over transactions, which is very slow due to row boxing and Python overhead.
+**Action:** Replaced the loop with vectorized `pd.merge` and `np.where` operations. Pivoted price/FX data was melted and merged back into the transaction DataFrame, allowing all calculations to happen in compiled C code.

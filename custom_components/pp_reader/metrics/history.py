@@ -6,6 +6,7 @@ import logging
 import sqlite3
 from typing import TYPE_CHECKING
 
+import numpy as np
 import pandas as pd
 
 from custom_components.pp_reader.const import TransactionType
@@ -154,31 +155,64 @@ def _calculate_daily_invested_capital(
     flow_txs = df_txs[df_txs["type"].isin(flow_types.keys())].copy()
     flow_txs["sign"] = flow_txs["type"].map(flow_types)
 
-    unique_flow_dates = pd.DatetimeIndex(flow_txs["date"].unique()).sort_values()
+    # Resolve active currencies and securities
     active_secs = flow_txs["security"].dropna().unique().tolist()
     active_currs = flow_txs["currency_code"].dropna().unique().tolist()
+    unique_dates = pd.DatetimeIndex(flow_txs["date"].unique()).sort_values()
 
-    flow_prices, _ = market_resolver.get_prices_pivot(active_secs, unique_flow_dates)
-    flow_fx = market_resolver.get_fx_pivot(active_currs, unique_flow_dates)
+    # Pre-fetch pivots
+    flow_prices, _ = market_resolver.get_prices_pivot(active_secs, unique_dates)
+    flow_fx = market_resolver.get_fx_pivot(active_currs, unique_dates)
 
-    eur_values = []
-    for _, row in flow_txs.iterrows():
-        val = 0
-        if row["security"]:
-            price = flow_prices.loc[row["date"], row["security"]]
-            curr = market_resolver.get_security_currency(row["security"])
-            rate = flow_fx.loc[row["date"], curr] if curr in flow_fx.columns else 1.0
-            val = row["shares_norm"] * price / rate if rate else 0.0
-        else:
-            rate = (
-                flow_fx.loc[row["date"], row["currency_code"]]
-                if row["currency_code"] in flow_fx.columns
-                else 1.0
-            )
-            val = row["amount_norm"] / rate if rate else 0.0
-        eur_values.append(val * row["sign"])
+    # --- Vectorized Calculation ---
 
-    flow_txs["flow_eur"] = eur_values
+    # 1. Map Securities to Currencies
+    sec_curr_map = {s: market_resolver.get_security_currency(s) for s in active_secs}
+    flow_txs["sec_currency"] = flow_txs["security"].map(sec_curr_map)
+    flow_txs["calc_currency"] = flow_txs["sec_currency"].fillna(
+        flow_txs["currency_code"]
+    )
+
+    # 2. Merge FX Rates
+    # Melt FX pivot to long format for merge
+    # Index is Date, Columns are Currencies.
+    if not flow_fx.empty:
+        # Reset index to make date a column
+        fx_long = flow_fx.reset_index().melt(
+            id_vars="date", var_name="calc_currency", value_name="fx_rate"
+        )
+        # Ensure types match for merge
+        fx_long["calc_currency"] = fx_long["calc_currency"].astype(object)
+
+        flow_txs = flow_txs.merge(fx_long, on=["date", "calc_currency"], how="left")
+        flow_txs["fx_rate"] = flow_txs["fx_rate"].fillna(1.0)
+    else:
+        flow_txs["fx_rate"] = 1.0
+
+    # 3. Merge Prices
+    if not flow_prices.empty:
+        prices_long = flow_prices.reset_index().melt(
+            id_vars="date", var_name="security", value_name="price"
+        )
+        prices_long["security"] = prices_long["security"].astype(object)
+
+        flow_txs = flow_txs.merge(prices_long, on=["date", "security"], how="left")
+    else:
+        flow_txs["price"] = 0.0
+
+    # 4. Compute Flow EUR
+    # Logic:
+    # If security: val = shares_norm * price / fx_rate
+    # If cash: val = amount_norm / fx_rate
+
+    # Use numpy where for vectorization
+    is_sec = flow_txs["security"].notna()
+    val_sec = flow_txs["shares_norm"] * flow_txs["price"] / flow_txs["fx_rate"]
+    val_cash = flow_txs["amount_norm"] / flow_txs["fx_rate"]
+
+    flow_txs["val_eur_unsigned"] = np.where(is_sec, val_sec, val_cash)
+    flow_txs["flow_eur"] = flow_txs["val_eur_unsigned"].fillna(0.0) * flow_txs["sign"]
+
     daily_flows = (
         flow_txs.groupby("date")["flow_eur"].sum().reindex(date_range, fill_value=0.0)
     )
