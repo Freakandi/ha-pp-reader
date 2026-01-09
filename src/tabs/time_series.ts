@@ -311,14 +311,22 @@ function renderMetrics(
             emptyRow.innerHTML = '<span class="metric-label">Keine Details</span><span class="metric-value">—</span>';
             target.after(emptyRow);
           } else {
-            [...items].reverse().forEach(item => {
+            [...items].reverse().forEach((item) => {
               const detailRow = document.createElement('div');
               detailRow.className = 'breakdown-row';
               detailRow.style.animation = 'fadeIn 0.2s ease';
-              detailRow.innerHTML = `
-                 <span class="metric-label">${item.label}</span>
-                 <span class="metric-value">${formatCurrency(item.amount)}</span>
-               `;
+
+              // Security: Create elements manually to prevent XSS from item.label
+              const labelSpan = document.createElement('span');
+              labelSpan.className = 'metric-label';
+              labelSpan.textContent = item.label; // Safe assignment
+
+              const valueSpan = document.createElement('span');
+              valueSpan.className = 'metric-value';
+              valueSpan.innerHTML = formatCurrency(item.amount); // Safe (formatCurrency returns number + &nbsp;€)
+
+              detailRow.appendChild(labelSpan);
+              detailRow.appendChild(valueSpan);
               target.after(detailRow);
             });
           }
