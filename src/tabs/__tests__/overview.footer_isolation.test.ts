@@ -97,16 +97,16 @@ describe("updatePortfolioFooterFromDom", () => {
       assert(outerFooter, "Outer footer should be found as a direct child of tbody");
 
       const outerFooterCell1 = outerFooter.querySelector("td:nth-child(1)");
-      assert.strictEqual(outerFooterCell1?.textContent?.trim(), "Summe", "Outer footer should be updated with 'Summe'");
+      assert.strictEqual(outerFooterCell1.textContent.trim(), "Summe", "Outer footer should be updated with 'Summe'");
 
       const outerFooterCell2 = outerFooter.querySelector("td:nth-child(2)");
-      assert.strictEqual(outerFooterCell2?.textContent?.trim(), "15", "Position count should be summed correctly");
+      assert.strictEqual(outerFooterCell2.textContent.trim(), "15", "Position count should be summed correctly");
 
       const outerFooterCell5 = outerFooter.querySelector("td:nth-child(5)");
       assert(outerFooterCell5, "5th cell of outer footer should exist");
       const gainAbsSpan = outerFooterCell5.querySelector(".val-top");
       assert(gainAbsSpan, "Gain Abs span should exist in the footer");
-      assert(gainAbsSpan.textContent?.includes("500"), "Absolute gain should be summed correctly (200 + 300 = 500)");
+      assert(gainAbsSpan.textContent.includes("500"), "Absolute gain should be summed correctly (200 + 300 = 500)");
 
     } finally {
       env.restore();

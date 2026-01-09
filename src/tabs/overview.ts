@@ -1329,7 +1329,7 @@ export function updatePortfolioFooterFromDom(
 
   let footer =
     existingFooters.length > 0
-      ? (existingFooters[0] as HTMLTableRowElement)
+      ? existingFooters[0]
       : null;
 
   if (!footer) {
