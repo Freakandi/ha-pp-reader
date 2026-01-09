@@ -9,6 +9,7 @@ import {
   formatNumber,
   makeTable,
   renderLoadingState,
+  renderRetryButton,
   stack,
 } from "../content/elements";
 import { openSecurityDetail } from "../dashboard";
@@ -1706,8 +1707,7 @@ async function reloadPortfolioPositions(
     if (resp.error) {
       const errorText =
         typeof resp.error === "string" ? resp.error : String(resp.error);
-      const safeUuid = escapeAttribute(portfolioUuid);
-      targetContainer.innerHTML = `<div class="error">${escapeHtml(errorText)} <button class="retry-pos" data-portfolio="${safeUuid}">Erneut laden</button></div>`;
+      targetContainer.innerHTML = `<div class="error">${escapeHtml(errorText)} ${renderRetryButton(portfolioUuid)}</div>`;
       return;
     }
     const normalizedPositions = normalizePositionRecords(
@@ -1735,8 +1735,7 @@ async function reloadPortfolioPositions(
     }
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    const safeUuid = escapeAttribute(portfolioUuid);
-    targetContainer.innerHTML = `<div class="error">Fehler: ${escapeHtml(message)} <button class="retry-pos" data-portfolio="${safeUuid}">Retry</button></div>`;
+    targetContainer.innerHTML = `<div class="error">Fehler beim Laden: ${escapeHtml(message)} ${renderRetryButton(portfolioUuid)}</div>`;
   }
 }
 
@@ -2029,8 +2028,7 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
                         ? resp.error
                         : String(resp.error);
                     if (containerEl) {
-                      const safeUuid = escapeAttribute(portfolioUuid);
-                      containerEl.innerHTML = `<div class="error">${escapeHtml(errorText)} <button class="retry-pos" data-portfolio="${safeUuid}">Erneut laden</button></div>`;
+                      containerEl.innerHTML = `<div class="error">${escapeHtml(errorText)} ${renderRetryButton(portfolioUuid)}</div>`;
                     }
                     return;
                   }
@@ -2071,8 +2069,7 @@ export function attachPortfolioToggleHandler(root: ToggleRootElement): void {
                       ".positions-container",
                     );
                   if (containerEl) {
-                    const safeUuid = escapeAttribute(portfolioUuid);
-                    containerEl.innerHTML = `<div class="error">Fehler beim Laden: ${escapeHtml(message)} <button class="retry-pos" data-portfolio="${safeUuid}">Retry</button></div>`;
+                    containerEl.innerHTML = `<div class="error">Fehler beim Laden: ${escapeHtml(message)} ${renderRetryButton(portfolioUuid)}</div>`;
                   }
                   console.error(
                     "Fehler beim Lazy Load für",
