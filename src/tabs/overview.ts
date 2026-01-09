@@ -1314,8 +1314,12 @@ export function updatePortfolioFooterFromDom(
         })()
       : null;
 
-  // Ensure unique footer
-  const existingFooters = tbody.querySelectorAll("tr.footer-row");
+  // Ensure unique footer by only selecting direct children
+  const existingFooters = Array.from(tbody.children).filter(
+    (child): child is HTMLTableRowElement =>
+      child.tagName === "TR" && child.classList.contains("footer-row"),
+  );
+
   if (existingFooters.length > 1) {
     // Remove duplicates, keep first
     for (let i = 1; i < existingFooters.length; i++) {
