@@ -1391,45 +1391,115 @@ class PerformanceEngine:
 
     def _augment_txs_with_market_data(self, df_txs: pd.DataFrame) -> pd.DataFrame:
         """
-        Augment transactions with FX rates and prices using scalar lookups.
+        Augment transactions with FX rates and prices using vectorized lookups.
 
-        This method populates 'fx_rate' and 'price' columns by iterating through
-        the DataFrame and calling the MarketResolver's scalar `_get_fx` and `_get_price`
-        methods. This ensures consistency between point-in-time valuations and
-        transaction flow valuations, sacrificing some performance for accuracy.
+        This method populates 'fx_rate' and 'price' columns by using efficient
+        pandas `merge_asof` operations against the full market data loaded in
+        MarketResolver. This is significantly faster than row-by-row scalar lookups.
         """
         if df_txs.empty:
-            # Ensure columns exist even for empty DataFrame
-            df_txs["fx_rate"] = []
-            df_txs["price"] = []
-            return df_txs.copy()
+            df_out = df_txs.copy()
+            df_out["fx_rate"] = []
+            df_out["price"] = []
+            return df_out
 
+        # 1. Prepare Inputs
+        # We must sort by date for merge_asof.
+        # We preserve original index to restore order later.
         df_out = df_txs.copy()
+        df_out["_orig_idx"] = np.arange(len(df_out))
+        df_out = df_out.sort_values("date")
 
-        rates = []
-        prices = []
-        # Use itertuples for performance over iterrows
-        for row in df_out.itertuples(index=False):
-            # FX Rate Lookup
-            # Priority 1: Use explicit transaction rate if available and valid
-            tx_rate = getattr(row, "fx_rate_used", None)
-            if tx_rate and tx_rate > 0:
-                rates.append(tx_rate)
-            else:
-                # Priority 2 & 3: Market/ECB Rate (fallback logic in MarketResolver)
-                currency = getattr(row, "currency_code", "EUR")
-                rates.append(self._get_fx(currency, row.date) or 0.0)
+        # 2. FX Lookup via merge_asof
+        # We access the underlying rates DataFrame directly for speed.
+        # MarketResolver._df_rates is guaranteed to be sorted by date.
+        df_rates = self.market_resolver._df_rates  # noqa: SLF001
 
-            # Price Lookup (only if security is present)
-            security = getattr(row, "security", None)
-            if security:
-                prices.append(self._get_price(security, row.date))
-            else:
-                prices.append(0.0)
+        # Handle currency_code missing or None -> "EUR"
+        if "currency_code" not in df_out.columns:
+            df_out["currency_code"] = "EUR"
+        else:
+            df_out["currency_code"] = df_out["currency_code"].fillna("EUR")
 
-        df_out["fx_rate"] = rates
-        df_out["price"] = prices
-        return df_out
+        if not df_rates.empty:
+            # We perform asof merge matching 'currency_code' with 'currency'
+            # Note: df_rates is already sorted by 'date' in MarketResolver.
+            df_out = pd.merge_asof(
+                df_out,
+                df_rates,
+                left_on="date",
+                right_on="date",
+                left_by="currency_code",
+                right_by="currency",
+                direction="backward",
+            )
+            # Rename 'rate' to 'market_fx_rate' and drop extra columns
+            df_out["market_fx_rate"] = df_out["rate"]
+            df_out = df_out.drop(columns=["rate", "currency"], errors="ignore")
+        else:
+            df_out["market_fx_rate"] = np.nan
+
+        # 3. Price Lookup via merge_asof
+        df_prices = self.market_resolver._df_prices  # noqa: SLF001
+
+        if not df_prices.empty:
+            # Ensure security column exists for merging
+            if "security" not in df_out.columns:
+                df_out["security"] = None
+
+            # df_prices is not strictly sorted by date globally (it's concat+drop_dup).
+            # We must sort it by date to satisfy merge_asof requirements.
+            df_prices_sorted = df_prices.sort_values("date")
+
+            df_out = pd.merge_asof(
+                df_out,
+                df_prices_sorted,
+                left_on="date",
+                right_on="date",
+                left_by="security",
+                right_by="security_uuid",
+                direction="backward",
+            )
+            df_out["price"] = df_out["close"].fillna(0.0)
+            df_out = df_out.drop(columns=["close", "security_uuid"], errors="ignore")
+        else:
+            df_out["price"] = 0.0
+
+        # 4. Final Logic and Cleanup
+
+        # FX Logic:
+        # Priority 1: Explicit fx_rate_used
+        # Priority 2: Market Rate
+        # Fallback: If EUR, 1.0. Else 0.0 (matches legacy behavior).
+
+        # Start with market rate
+        df_out["fx_rate"] = df_out["market_fx_rate"]
+
+        # Apply EUR default logic: If currency is EUR, rate is 1.0.
+        # merge_asof won't find EUR in rates table usually.
+        mask_eur = df_out["currency_code"] == "EUR"
+        if mask_eur.any():
+            df_out.loc[mask_eur, "fx_rate"] = df_out.loc[mask_eur, "fx_rate"].fillna(
+                1.0
+            )
+
+        # Fill remaining NaNs with 0.0
+        df_out["fx_rate"] = df_out["fx_rate"].fillna(0.0)
+
+        # Override with fx_rate_used where present
+        if "fx_rate_used" in df_out.columns:
+            mask_explicit = (df_out["fx_rate_used"].notna()) & (
+                df_out["fx_rate_used"] > 0
+            )
+            if mask_explicit.any():
+                df_out.loc[mask_explicit, "fx_rate"] = df_out.loc[
+                    mask_explicit, "fx_rate_used"
+                ]
+
+        # Restore order and drop temporary columns
+        return df_out.sort_values("_orig_idx").drop(
+            columns=["_orig_idx", "market_fx_rate"], errors="ignore"
+        )
 
     def _calculate_gross_neutral_flows(
         self,
