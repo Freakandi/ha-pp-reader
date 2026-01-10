@@ -17,6 +17,7 @@ node_modules/
 coverage.xml
 .ruff_cache
 .venv
+.gemini
 
 # Home Assistant configuration
 config/*
