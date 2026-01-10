@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 import pandas as pd
 
-from custom_components.pp_reader.const import TransactionType
+from custom_components.pp_reader.const import SHARE_EPSILON, TransactionType
 
 if TYPE_CHECKING:
     from datetime import date
@@ -18,9 +18,6 @@ if TYPE_CHECKING:
 
 
 _LOGGER = logging.getLogger(__name__)
-
-# Epsilon for floating point comparisons to avoid noise in holdings
-_SHARE_EPSILON = 1e-9
 
 
 def _calculate_daily_security_wealth(
@@ -53,7 +50,7 @@ def _calculate_daily_security_wealth(
     )
 
     active_securities = sec_holdings.columns[
-        (sec_holdings.abs() > _SHARE_EPSILON).any()
+        (sec_holdings.abs() > SHARE_EPSILON).any()
     ].tolist()
     prices_pivot, _ = market_resolver.get_prices_pivot(active_securities, date_range)
 

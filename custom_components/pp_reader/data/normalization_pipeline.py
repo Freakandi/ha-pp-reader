@@ -18,6 +18,7 @@ if TYPE_CHECKING:
 else:  # pragma: no cover - runtime fallback for type hints
     HomeAssistant = Any  # type: ignore[assignment]
 
+from custom_components.pp_reader.const import EIGHT_DECIMAL_SCALE
 from custom_components.pp_reader.logic.portfolio import normalize_shares
 from custom_components.pp_reader.logic.securities import (
     PURCHASE_TYPES,
@@ -1698,9 +1699,6 @@ def _load_security_price_dates(db_path: Path) -> dict[str, int]:
         return {}
 
 
-_EIGHT_DECIMAL_SCALE = 10**8
-
-
 def _from_eight_decimal(
     value: Any,
     *,
@@ -1712,7 +1710,7 @@ def _from_eight_decimal(
         return default
 
     try:
-        numeric = float(value) / _EIGHT_DECIMAL_SCALE
+        numeric = float(value) / EIGHT_DECIMAL_SCALE
     except (TypeError, ValueError):
         return default
 

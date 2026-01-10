@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from typing import TYPE_CHECKING, Any
 
+from custom_components.pp_reader.const import EIGHT_DECIMAL_SCALE
 from custom_components.pp_reader.currencies.persistence import (
     FxRateRecord,
     load_fx_rates_for_date,
@@ -44,7 +45,6 @@ _LOGGER = logging.getLogger("custom_components.pp_reader.data.db_access")
 
 
 _MISSING_DB_RESOURCE_MESSAGE = "Entweder db_path oder conn muss angegeben werden."
-_EIGHT_DECIMAL_SCALE = 10**8
 _SCALED_INT_THRESHOLD = 10_000
 _EPOCH_START_DATE = date(1970, 1, 1)
 _MAX_EPOCH_DAY_VALUE = 100_000
@@ -63,7 +63,7 @@ def _from_eight_decimal(
         return default
 
     try:
-        numeric = float(value) / _EIGHT_DECIMAL_SCALE
+        numeric = float(value) / EIGHT_DECIMAL_SCALE
     except (TypeError, ValueError):
         return default
 
@@ -110,7 +110,7 @@ def _decode_scaled_currency(
     except (TypeError, ValueError):
         return None
     if abs(numeric) >= _SCALED_INT_THRESHOLD:
-        numeric = numeric / _EIGHT_DECIMAL_SCALE
+        numeric = numeric / EIGHT_DECIMAL_SCALE
     return round(numeric, decimals)
 
 
@@ -123,7 +123,7 @@ def _decode_holdings_value(value: Any) -> float:
     except (TypeError, ValueError):
         return 0.0
     if abs(numeric) >= _SCALED_INT_THRESHOLD:
-        numeric = numeric / _EIGHT_DECIMAL_SCALE
+        numeric = numeric / EIGHT_DECIMAL_SCALE
     return round(numeric, 6)
 
 

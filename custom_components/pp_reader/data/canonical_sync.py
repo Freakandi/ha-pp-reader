@@ -8,6 +8,7 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
+from custom_components.pp_reader.const import EIGHT_DECIMAL_SCALE
 from custom_components.pp_reader.data.db_access import Transaction
 from custom_components.pp_reader.logic.accounting import db_calc_account_balance
 from custom_components.pp_reader.logic.portfolio import normalize_shares
@@ -20,7 +21,6 @@ from custom_components.pp_reader.util import async_run_executor_job
 _LOGGER = logging.getLogger("custom_components.pp_reader.data.canonical_sync")
 
 _SCALED_INT_THRESHOLD = 10_000
-_EIGHT_DECIMAL_SCALE = 10**8
 
 
 async def async_sync_ingestion_to_canonical(
@@ -163,7 +163,7 @@ def _normalize_scaled_quantity(value: float | None) -> float:
     except (TypeError, ValueError):
         return 0.0
     if abs(numeric) >= _SCALED_INT_THRESHOLD:
-        return numeric / _EIGHT_DECIMAL_SCALE
+        return numeric / EIGHT_DECIMAL_SCALE
     return numeric
 
 
@@ -654,7 +654,7 @@ def _build_portfolio_security_rows(
 
         purchase_value_eur = computation.purchase_value if computation else 0.0
         purchase_cents_eur = round(purchase_value_eur * 100)
-        holdings_raw = round(current_holdings * _EIGHT_DECIMAL_SCALE)
+        holdings_raw = round(current_holdings * EIGHT_DECIMAL_SCALE)
 
         rows.append(
             (

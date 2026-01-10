@@ -7,6 +7,7 @@ import sqlite3
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
+from custom_components.pp_reader.const import EIGHT_DECIMAL_SCALE
 from custom_components.pp_reader.data.db_access import PortfolioMetricRecord
 from custom_components.pp_reader.metrics.common import select_performance_metrics
 from custom_components.pp_reader.util import async_run_executor_job
@@ -19,7 +20,6 @@ if TYPE_CHECKING:
 
 _LOGGER = logging.getLogger("custom_components.pp_reader.metrics.portfolio")
 _SCALED_INT_THRESHOLD = 10_000
-_EIGHT_DECIMAL_SCALE = 10**8
 
 _PORTFOLIO_AGGREGATION_SQL = """
     SELECT
@@ -147,6 +147,6 @@ def _normalize_currency_cents(value: int) -> int:
     Inflated legacy totals can be detected by their magnitude and rescaled to
     canonical cents so downstream snapshots remain reasonable.
     """
-    if abs(value) >= _SCALED_INT_THRESHOLD * _EIGHT_DECIMAL_SCALE:
-        return round(value / _EIGHT_DECIMAL_SCALE)
+    if abs(value) >= _SCALED_INT_THRESHOLD * EIGHT_DECIMAL_SCALE:
+        return round(value / EIGHT_DECIMAL_SCALE)
     return value

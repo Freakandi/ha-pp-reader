@@ -14,6 +14,7 @@ import numpy as np
 import pandas as pd
 
 from custom_components.pp_reader.const import (
+    SHARE_EPSILON,
     TransactionType,
 )
 from custom_components.pp_reader.data import db_access
@@ -40,7 +41,6 @@ _ZERO_AMOUNT_EPSILON = 0.0001
 UNIT_TYPE_TAX = 1
 UNIT_TYPE_FEE = 2
 EPOCH_DAY_THRESHOLD = 100000
-_SHARE_EPSILON = 1e-9
 
 
 @dataclass(slots=True)
@@ -223,7 +223,7 @@ class PerformanceEngine:
             if tx.security and tx.type in share_signs and tx.shares is not None:
                 inventory[tx.security] += tx.shares / 1e8 * share_signs.get(tx.type, 0)
 
-        return {sec: qty for sec, qty in inventory.items() if abs(qty) > _SHARE_EPSILON}
+        return {sec: qty for sec, qty in inventory.items() if abs(qty) > SHARE_EPSILON}
 
     def _calculate_cash_inventory(
         self, transactions: list[Transaction]
@@ -256,7 +256,7 @@ class PerformanceEngine:
                 if tx.other_account and tx.amount is not None:
                     inventory[(tx.other_account, tx.currency_code)] += tx.amount / 100.0
 
-        return {acc: bal for acc, bal in inventory.items() if abs(bal) > _SHARE_EPSILON}
+        return {acc: bal for acc, bal in inventory.items() if abs(bal) > SHARE_EPSILON}
 
     def _calculate_invested_capital(  # noqa: PLR0912
         self,
@@ -1169,7 +1169,7 @@ class PerformanceEngine:
             lots_to_process = inventory[sec_id]
             remaining_shares_to_sell = shares
 
-            while remaining_shares_to_sell > _SHARE_EPSILON and lots_to_process:
+            while remaining_shares_to_sell > SHARE_EPSILON and lots_to_process:
                 lot = lots_to_process[0]
                 shares_from_lot = min(lot.shares, remaining_shares_to_sell)
 
@@ -1211,7 +1211,7 @@ class PerformanceEngine:
                     )
                 )
 
-                if lot.shares < _SHARE_EPSILON:
+                if lot.shares < SHARE_EPSILON:
                     lots_to_process.popleft()
 
     def _resolve_sec_name(self, uuid_val: str) -> str:
@@ -1659,7 +1659,7 @@ class PerformanceEngine:
             daily_total = 0.0
             if d in sec_holdings.index:
                 holdings_on_date = sec_holdings.loc[d]
-                held_secs = holdings_on_date[holdings_on_date.abs() > _SHARE_EPSILON]
+                held_secs = holdings_on_date[holdings_on_date.abs() > SHARE_EPSILON]
                 for sec_uuid, qty in held_secs.items():
                     price = self._get_price(sec_uuid, d)
                     curr = self.market_resolver.get_security_currency(sec_uuid)
@@ -1730,7 +1730,7 @@ class PerformanceEngine:
             if d in acc_balances.index:
                 balances_on_date = acc_balances.loc[d]
                 for (_acc, curr), bal in balances_on_date.items():
-                    if abs(bal) > _SHARE_EPSILON:
+                    if abs(bal) > SHARE_EPSILON:
                         rate = self._get_fx(curr, d)
                         daily_total += bal / rate if rate else 0.0
             wealth_values.append(daily_total)
@@ -2545,7 +2545,7 @@ class PerformanceEngine:
         holdings = df_past.groupby("security")["delta_shares"].sum()
 
         # Filter out zero or near-zero holdings and return dict
-        return {k: v for k, v in holdings.items() if abs(v) > _SHARE_EPSILON}
+        return {k: v for k, v in holdings.items() if abs(v) > SHARE_EPSILON}
 
     def _get_account_balances(
         self, ts: pd.Timestamp, portfolio_uuid: str | None = None
