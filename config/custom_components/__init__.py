@@ -23,9 +23,9 @@ class _LoaderWarningFilter(logging.Filter):
             return True
 
         if (
-            isinstance(record.msg, str)
+            record.args  # Check args first to avoid string comparison on static logs
+            and isinstance(record.msg, str)
             and record.msg == _CUSTOM_WARNING_TEMPLATE
-            and record.args
         ):
             first_arg = record.args[0]
             if isinstance(first_arg, str) and first_arg == _PP_READER_DOMAIN:
