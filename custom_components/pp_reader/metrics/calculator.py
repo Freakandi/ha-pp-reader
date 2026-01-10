@@ -51,6 +51,7 @@ class Lot:
     shares: float
     price_native: float
     fx_rate: float
+    price_gross_native: float = 0.0
 
 
 @dataclass
@@ -643,6 +644,7 @@ class PerformanceEngine:
                         shares=share_count,
                         price_native=start_price,
                         fx_rate=start_fx,
+                        price_gross_native=start_price,
                     )
                 ]
             )
@@ -1109,6 +1111,20 @@ class PerformanceEngine:
 
             price_native = (net_amount / 100.0) / shares if shares > 0 else 0.0
 
+        # Calculate Gross Price (includes fees & taxes)
+        # Case A: We have a total amount (BUY with explicit cash flow)
+        if tx_row.amount is not None and abs(tx_row.amount) > 0:
+            gross_amount = abs(tx_row.amount)
+            price_gross_native = (gross_amount / 100.0) / shares if shares > 0 else 0.0
+        else:
+            # Case B: Delivery or Missing Amount -> Reconstruct from Net + Aux
+            # Reconstruct gross from net by adding back fees and taxes
+            price_gross_native = (
+                price_native + ((fees + taxes) / 100.0) / shares
+                if shares > 0
+                else 0.0
+            )
+
         # Priority 1: Use explicitly recorded FX rate for this transaction
         explicit_rate = getattr(tx_row, "fx_rate_used", None)
         if explicit_rate and explicit_rate > 0:
@@ -1126,6 +1142,7 @@ class PerformanceEngine:
                 shares=shares,
                 price_native=price_native,
                 fx_rate=fx_rate,
+                price_gross_native=price_gross_native,
             )
         )
 

@@ -113,8 +113,14 @@ def _create_security_record(
     cost_basis = 0.0
     if sec_uuid in active_lots:
         for lot in active_lots[sec_uuid]:
+            # Use gross price if available, else fallback to net
+            p_input = (
+                lot.price_gross_native
+                if lot.price_gross_native > 0
+                else lot.price_native
+            )
             cost_basis += (
-                lot.shares * lot.price_native / lot.fx_rate if lot.fx_rate else 0.0
+                lot.shares * p_input / lot.fx_rate if lot.fx_rate else 0.0
             )
 
     unrealized_gain = current_value - cost_basis
