@@ -48,6 +48,41 @@ const resolveRoundedTrend = (
   return numericValue > 0 ? "positive" : "negative";
 };
 
+/**
+ * 🛡️ SECURITY: Sanitize markup by allowing only specific safe tags.
+ * This function implements a strict allowlist approach.
+ */
+export function sanitizeMarkup(content: string): string {
+  // 🛡️ SECURITY: Detect potentially dangerous XSS patterns even in "markup" mode.
+  // Callers often pass pre-escaped HTML (e.g. badges, localized dates), so we cannot
+  // unconditionally escape everything. However, specific patterns like <script>,
+  // javascript: URI, or event handlers (onX=) are never valid in our cell content
+  // and indicate an attack vector.
+  // We only apply this check if the string actually contains unescaped HTML tags (start with <).
+  // If it's already escaped (&lt;...), we leave it alone to avoid double-escaping.
+  if (/<[a-z]/i.test(content)) {
+    // 🛡️ SENTINEL: Strict Allowlist Approach
+    // We strictly allow only specific safe tags. If the string contains any tag
+    // that is NOT in the allowlist (like <a>, <script>, <img>, <svg>), we escape the whole string.
+    // Allowed tags: span, div, ha-icon, strong, br, p, button.
+    // Regex finds any tag <TAG that is NOT in the allowlist.
+    const DISALLOWED_TAG_PATTERN = /<\/?(?!(?:span|div|ha-icon|strong|br|p|button)\b)[a-z][a-z0-9]*\b/i;
+
+    // Expanded blacklist for attributes on allowed tags:
+    // - javascript: (catch all variations in attributes)
+    // - data: (prevent base64 XSS)
+    // - on[event]= (inline handlers)
+    // - url( (prevent CSS injection in style attributes)
+    // - href/src (allowed tags shouldn't need these, blocks potential oversight)
+    const DANGEROUS_PATTERN = /javascript:|data:\w+\/|[\s\/]on[a-z]+\s*=|url\s*\(|[\s\/](?:href|src)\s*=/i;
+
+    if (DISALLOWED_TAG_PATTERN.test(content) || DANGEROUS_PATTERN.test(content)) {
+      return escapeHtml(content);
+    }
+  }
+  return content;
+}
+
 export function formatValue(
   key: string,
   value: unknown,
@@ -177,33 +212,7 @@ export function formatValue(
     }
     formatted = base;
     if (formatted) {
-      // 🛡️ SECURITY: Detect potentially dangerous XSS patterns even in "markup" mode.
-      // Callers often pass pre-escaped HTML (e.g. badges, localized dates), so we cannot
-      // unconditionally escape everything. However, specific patterns like <script>,
-      // javascript: URI, or event handlers (onX=) are never valid in our cell content
-      // and indicate an attack vector.
-      // We only apply this check if the string actually contains unescaped HTML tags (start with <).
-      // If it's already escaped (&lt;...), we leave it alone to avoid double-escaping.
-      if (/<[a-z]/i.test(formatted)) {
-        // 🛡️ SENTINEL: Strict Allowlist Approach
-        // We strictly allow only specific safe tags. If the string contains any tag
-        // that is NOT in the allowlist (like <a>, <script>, <img>, <svg>), we escape the whole string.
-        // Allowed tags: span, div, ha-icon, strong, br, p, button.
-        // Regex finds any tag <TAG that is NOT in the allowlist.
-        const DISALLOWED_TAG_PATTERN = /<\/?(?!(?:span|div|ha-icon|strong|br|p|button)\b)[a-z][a-z0-9]*\b/i;
-
-        // Expanded blacklist for attributes on allowed tags:
-        // - javascript: (catch all variations in attributes)
-        // - data: (prevent base64 XSS)
-        // - on[event]= (inline handlers)
-        // - url( (prevent CSS injection in style attributes)
-        // - href/src (allowed tags shouldn't need these, blocks potential oversight)
-        const DANGEROUS_PATTERN = /javascript:|data:\w+\/|[\s\/]on[a-z]+\s*=|url\s*\(|[\s\/](?:href|src)\s*=/i;
-
-        if (DISALLOWED_TAG_PATTERN.test(formatted) || DANGEROUS_PATTERN.test(formatted)) {
-          formatted = escapeHtml(formatted);
-        }
-      }
+      formatted = sanitizeMarkup(formatted);
 
       const hasMarkup = /<|&lt;|&gt;/.test(formatted);
       if (!hasMarkup) {
@@ -558,10 +567,15 @@ export function stack(
   botVal: number | string,
   botFmt: string,
 ): string {
+  // 🛡️ SECURITY: Apply same strict sanitization as formatValue()
+  // to prevent XSS via manually constructed strings.
+  const safeTopFmt = sanitizeMarkup(topFmt);
+  const safeBotFmt = sanitizeMarkup(botFmt);
+
   return `
       <div class="cell-stack">
-        <span class="val-top" data-val="${escapeAttribute(topVal)}">${topFmt}</span>
-        <span class="val-bottom" data-val="${escapeAttribute(botVal)}">${botFmt}</span>
+        <span class="val-top" data-val="${escapeAttribute(topVal)}">${safeTopFmt}</span>
+        <span class="val-bottom" data-val="${escapeAttribute(botVal)}">${safeBotFmt}</span>
       </div>
     `;
 }
