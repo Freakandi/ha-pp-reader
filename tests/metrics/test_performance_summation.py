@@ -24,9 +24,10 @@ def test_summation_with_cash_flows_and_fx():
     conn.execute("""
         CREATE TABLE transactions (
             uuid TEXT, type INTEGER, date TEXT, account TEXT, other_account TEXT, portfolio TEXT, other_portfolio TEXT,
-            security TEXT, shares INTEGER, amount INTEGER, currency_code TEXT
+            security TEXT, shares INTEGER, amount INTEGER, currency_code TEXT, fx_rate_used REAL
         )
     """)
+
     conn.execute("""
         CREATE TABLE transaction_units (
             transaction_uuid TEXT, type INTEGER, amount INTEGER, currency_code TEXT,
@@ -85,7 +86,7 @@ def test_summation_with_cash_flows_and_fx():
     # Transactions
     # 1. Deposit (T_mid). 100 USD (Gross) -> 90 USD (Net) + 10 USD Fee.
     conn.execute(
-        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?)",
+        "INSERT INTO transactions VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
         (
             "t_dep",
             6,
@@ -98,6 +99,7 @@ def test_summation_with_cash_flows_and_fx():
             0,
             9000,
             "USD",
+            None,
         ),
     )  # Net Amount 90.00
 

@@ -222,6 +222,7 @@ class MarketResolver:
             index="date", columns="security_uuid", values="close"
         )
         pivot_reindexed = pivot_unfilled.reindex(date_range)
+        pivot_reindexed.index.name = "date"
         price_exists_mask = pivot_reindexed.notna()
         pivot_filled = pivot_reindexed.ffill().bfill()
 
@@ -243,6 +244,7 @@ class MarketResolver:
             index="date", columns="currency", values="rate"
         )
         pivot_reindexed = pivot_unfilled.reindex(date_range)
+        pivot_reindexed.index.name = "date"
         return pivot_reindexed.ffill().bfill()
 
     def is_price_stale(self, sec_uuid: str, d: date | pd.Timestamp) -> bool:

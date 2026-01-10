@@ -1,6 +1,11 @@
 # Task: Fix Missing Push Events for Portfolio Positions
 
-## Status: [ ] Open
+## Status: [x] Complete
+
+## Metadata
+- **Est. Complexity**: Low
+- **Suggested Mode**: Local
+- **Execution Mode**: Local
 
 ## Issue
 The user reports that while "portfolio_values" (aggregates) are correctly pushed after a price update, the "portfolio_positions" (individual line items) are NOT being pushed. This leads to stale data in the expandable rows of the dashboard until a manual refresh or reload occurs.
@@ -15,24 +20,38 @@ The user reports that while "portfolio_values" (aggregates) are correctly pushed
   - `custom_components/pp_reader/prices/revaluation.py` has logic for partial updates that includes positions, but `price_service.py` performs a full refresh and does not use `revaluation.py` for the final push.
 
 ## Implementation Plan
-1.  **Modify `custom_components/pp_reader/prices/price_service.py`**:
-    -   Import `load_portfolio_position_snapshots` and `serialize_position_snapshot` from `custom_components/pp_reader/data/normalization_pipeline.py`.
-    -   Update `_run_metrics_refresh` inner function:
-        -   After successfully fetching `portfolio_payload` (aggregates), extract all `portfolio_uuid`s.
-        -   Call `await async_run_executor_job(hass, load_portfolio_position_snapshots, Path(db_path), portfolio_ids)`.
-        -   Serialize the returned `PositionSnapshot` objects using `serialize_position_snapshot`.
-        -   Push the serialized data using `_push_update` with `data_type="portfolio_positions"`.
-    -   Ensure exception handling matches the existing pattern (log errors but don't crash).
+
+### Chunk 1: Update Price Service
+- [x] **File**: `custom_components/pp_reader/prices/price_service.py`
+  - **Action**: Add Imports
+    - `load_portfolio_position_snapshots` from `custom_components.pp_reader.data.normalization_pipeline`
+    - `serialize_position_snapshot` from `custom_components.pp_reader.data.normalization_pipeline`
+  - **Action**: Modify `_run_metrics_refresh`
+    - In the `else` block of `fetch_live_portfolios` (when successful):
+    - Extract `portfolio_ids` from `portfolio_payload` (e.g. `[p["uuid"] for p in portfolio_payload if p.get("uuid")]`).
+    - Call `raw_positions = await async_run_executor_job(hass, load_portfolio_position_snapshots, Path(db_path), portfolio_ids)`.
+    - Iterate over `raw_positions` and serialize:
+      ```python
+      positions_payload = []
+      for pid, snapshots in raw_positions.items():
+          if not snapshots:
+              continue
+          positions_payload.append({
+              "portfolio_uuid": pid,
+              "positions": [serialize_position_snapshot(s) for s in snapshots],
+          })
+      ```
+    - Call `_push_update(hass, entry_id, "portfolio_positions", positions_payload)`.
+
+### Chunk 2: Fix Data Quality (Unified Fetch)
+- [x] **File**: `tasks/fix_push_data_quality.md`
+  - **Issue**: "Last Price" disappeared and sums were inconsistent because of potentially divergent fetch logic.
+  - **Fix**: Replaced separate `fetch_live_portfolios` and `load_portfolio_position_snapshots` with a single `async_normalize_snapshot(include_positions=True)` call.
+  - **Status**: Implemented and verified by unit tests.
 
 ## Verification
 1.  **Manual Verification** (Implicit):
-    -   Since I cannot run the UI, I will rely on the code correctness and existing tests passing.
-    -   The user will verify via UI.
+    -   User will verify via UI if positions update after price change.
 2.  **Automated Tests**:
-    -   Run `pytest tests/metrics/test_performance_summation.py` and `pytest tests/prices/test_price_service.py` (if exists) to ensure no regression.
-    -   (Optional) If a test for `price_service.py` mocks `_push_update`, I could check if it's called twice.
-
-## Todos
-- [ ] Implement changes in `price_service.py`
-- [ ] Run linting (`ruff check .`, `ruff format .`)
-- [ ] Run tests
+    -   Run `pytest tests/metrics/test_performance_summation.py` to ensure core metrics are fine.
+    -   Run `ruff check .` to ensure no import errors.

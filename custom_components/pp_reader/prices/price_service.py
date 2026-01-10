@@ -30,12 +30,10 @@ from custom_components.pp_reader.const import DOMAIN
 from custom_components.pp_reader.data.db_access import (
     Transaction as DbTransaction,
 )
-from custom_components.pp_reader.data.db_access import (
-    fetch_live_portfolios,
-)
 from custom_components.pp_reader.data.event_push import _push_update
 from custom_components.pp_reader.data.normalization_pipeline import (
     async_normalize_snapshot,
+    serialize_portfolio_snapshot,
 )
 from custom_components.pp_reader.data.normalized_store import (
     SnapshotBundle,
@@ -103,46 +101,79 @@ async def _schedule_metrics_after_price_change(
                 getattr(run, "status", None),
             )
             try:
-                await async_normalize_snapshot(
+                # Unified Fetch: Use the main pipeline to get both aggregates and
+                # positions consistently
+                norm_result = await async_normalize_snapshot(
                     hass,
                     Path(db_path),
-                    include_positions=False,
+                    include_positions=True,
                 )
             except Exception:  # noqa: BLE001 - defensive logging
                 _LOGGER.debug(
-                    "prices_cycle: Normalization nach Metrics-Refresh fehlgeschlagen",
+                    "prices_cycle: Normalization (Unified) fehlgeschlagen",
                     exc_info=True,
                 )
+                return
 
+            # 1. Prepare Portfolio Values (Aggregates)
             try:
-                portfolio_payload = await async_run_executor_job(
-                    hass,
-                    fetch_live_portfolios,
-                    Path(db_path),
-                )
-            except Exception:  # noqa: BLE001 - defensive logging
-                _LOGGER.debug(
-                    (
-                        "prices_cycle: Live-Portfolio-Payload nach Metrics-Refresh "
-                        "fehlgeschlagen"
-                    ),
-                    exc_info=True,
-                )
-            else:
-                if portfolio_payload is not None:
+                portfolio_payload = []
+                positions_payload = []
+
+                for portfolio_snap in norm_result.portfolios:
+                    # Aggregate Payload
+                    # Note: serialize_portfolio_snapshot includes "positions" key if
+                    # present. The legacy "portfolio_values" event listener likely
+                    # ignores unknown keys, but let's be safe and strip "positions"
+                    # from the aggregate payload to match previous behavior.
+                    p_data = serialize_portfolio_snapshot(portfolio_snap)
+
+                    # Positions Payload
+                    # Positions Payload (structure: portfolio_uuid + list of positions)
+                    if "positions" in p_data:
+                        # Remove from aggregate, keep for positions event
+                        positions_list = p_data.pop("positions")
+                        positions_payload.append(
+                            {
+                                "portfolio_uuid": portfolio_snap.uuid,
+                                "positions": positions_list,
+                            }
+                        )
+
+                    portfolio_payload.append(p_data)
+
+                if portfolio_payload:
                     _push_update(
                         hass,
                         entry_id,
                         "portfolio_values",
                         portfolio_payload,
                     )
-                    # Signal that daily wealth (time series) data has likely changed
+
+                if positions_payload:
                     _push_update(
                         hass,
                         entry_id,
-                        "daily_wealth",
-                        {},
+                        "portfolio_positions",
+                        positions_payload,
                     )
+
+            except Exception:  # noqa: BLE001
+                _LOGGER.warning(
+                    (
+                        "prices_cycle: Fehler beim Erstellen der Push-Payloads "
+                        "aus NormalizationResult"
+                    ),
+                    exc_info=True,
+                )
+
+            # Signal that daily wealth (time series) data has likely changed
+            _push_update(
+                hass,
+                entry_id,
+                "daily_wealth",
+                {},
+            )
         except Exception:  # noqa: BLE001 - defensive logging
             _LOGGER.warning(
                 "prices_cycle: Metrics-Refresh nach Preis-Update fehlgeschlagen",
