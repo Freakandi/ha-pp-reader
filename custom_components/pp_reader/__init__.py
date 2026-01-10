@@ -1,3 +1,1 @@
-"""
-Portfolio Performance Reader Component.
-"""
+"""Portfolio Performance Reader Component."""
