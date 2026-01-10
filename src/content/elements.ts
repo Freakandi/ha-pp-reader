@@ -725,3 +725,22 @@ export function renderRetryButton(portfolioUuid: string, label = "Erneut laden")
     ${REFRESH_ICON}${safeLabel}
   </button>`;
 }
+
+// Copy Icon (Material Design: Content Copy)
+const COPY_ICON = `<svg class="action-icon" viewBox="0 0 24 24" aria-hidden="true" style="width: 1.2em; height: 1.2em; vertical-align: text-bottom; margin-right: 6px; fill: currentColor;"><path d="M19,21H8V7H19M19,5H8A2,2 0 0,0 6,7V21A2,2 0 0,0 8,23H19A2,2 0 0,0 21,21V7A2,2 0 0,0 19,5M16,1H4A2,2 0 0,0 2,3V17H4V3H16V1Z"/></svg>`;
+
+export function renderNewsPromptButton(tickerSymbol: string, label = "Copy prompt & open ChatGPT"): string {
+  const safeSymbol = escapeAttribute(tickerSymbol);
+  const safeLabel = escapeHtml(label);
+  return `
+    <div class="news-prompt-container">
+      <button
+        type="button"
+        class="news-prompt-button"
+        data-symbol="${safeSymbol}"
+      >
+        ${COPY_ICON}${safeLabel}
+      </button>
+    </div>
+  `;
+}

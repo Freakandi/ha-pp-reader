@@ -17,6 +17,7 @@ import {
   formatGain,
   formatGainPct,
   formatNumber,
+  renderNewsPromptButton,
 } from '../content/elements';
 import type {
   NewsPromptResponse,
@@ -1089,21 +1090,6 @@ function resolveTickerSymbol(
   return typeof securityUuid === 'string' ? securityUuid : '';
 }
 
-function buildNewsPromptButton(tickerSymbol: string): string {
-  const safeSymbol = escapeAttribute(tickerSymbol);
-  return `
-    <div class="news-prompt-container">
-      <button
-        type="button"
-        class="news-prompt-button"
-        data-symbol="${safeSymbol}"
-      >
-        Copy prompt &amp; open ChatGPT
-      </button>
-    </div>
-  `;
-}
-
 async function copyTextToClipboard(text: string): Promise<boolean> {
   if (typeof navigator !== 'undefined') {
     // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
@@ -2143,9 +2129,10 @@ function scheduleNewsPromptSetup(options: {
       }
       button.disabled = true;
       button.classList.add('loading');
-      const originalText = button.textContent;
+      const originalHtml = button.innerHTML;
+      const originalLabel = button.textContent.trim();
       button.innerHTML = createInlineSpinner();
-      button.append(document.createTextNode(` ${originalText || ''}`));
+      button.append(document.createTextNode(` ${originalLabel || ''}`));
 
       try {
         const { body, link } = buildPromptPayload(symbol);
@@ -2172,9 +2159,9 @@ function scheduleNewsPromptSetup(options: {
       } finally {
         button.classList.remove('loading');
         button.disabled = false;
-        if (originalText) {
+        if (originalHtml) {
           setTimeout(() => {
-            button.textContent = originalText;
+            button.innerHTML = originalHtml;
           }, 2000);
         }
       }
@@ -2337,7 +2324,7 @@ export async function renderSecurityDetail(
   }
 
   const tickerSymbol = resolveTickerSymbol(effectiveSnapshot, securityUuid);
-  const newsPromptButton = buildNewsPromptButton(tickerSymbol);
+  const newsPromptButton = renderNewsPromptButton(tickerSymbol);
 
   const snapshotLastPriceNative = extractSnapshotLastPriceNative(effectiveSnapshot);
   const { priceChange, priceChangePct } = computePriceChangeMetrics(

@@ -14,6 +14,7 @@ import {
   createHeaderCard,
   createInlineSpinner,
   formatNumber,
+  renderNewsPromptButton,
 } from '../content/elements';
 import type {
   NewsPromptResponse,
@@ -774,17 +775,6 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   return successful;
 }
 
-function buildNewsPromptButton(tickerSymbol: string): string {
-  const safeSymbol = escapeAttribute(tickerSymbol);
-  return `
-    <div class="news-prompt-container">
-      <button type="button" class="news-prompt-button" data-symbol="${safeSymbol}">
-        Copy prompt &amp; open ChatGPT
-      </button>
-    </div>
-  `;
-}
-
 function scheduleNewsPromptSetup(options: {
   root: HTMLElement;
   hass: HomeAssistant | null | undefined;
@@ -810,9 +800,10 @@ function scheduleNewsPromptSetup(options: {
 
         button.disabled = true;
         button.classList.add('loading');
-        const originalText = button.textContent;
+        const originalHtml = button.innerHTML;
+        const originalLabel = button.textContent.trim();
         button.innerHTML = createInlineSpinner();
-        button.append(document.createTextNode(` ${originalText || ''}`));
+        button.append(document.createTextNode(` ${originalLabel || ''}`));
 
         try {
           const placeholder = (cachedPrompt?.placeholder || NEWS_PROMPT_PLACEHOLDER_FALLBACK).trim() || NEWS_PROMPT_PLACEHOLDER_FALLBACK;
@@ -832,7 +823,7 @@ function scheduleNewsPromptSetup(options: {
         } finally {
           button.classList.remove('loading');
           button.disabled = false;
-          if (originalText) setTimeout(() => { button.textContent = originalText; }, 2000);
+          if (originalHtml) setTimeout(() => { button.innerHTML = originalHtml; }, 2000);
         }
       })();
     });
@@ -919,7 +910,7 @@ async function renderTradeDetail(
   const historyPlaceholder = buildHistoryPlaceholder(activeRange, historyState);
 
   const tickerSymbol = trade.ticker_symbol || trade.name;
-  const newsPrompt = buildNewsPromptButton(tickerSymbol);
+  const newsPrompt = renderNewsPromptButton(tickerSymbol);
 
   const content = `
     <div class="trade-detail-container">
