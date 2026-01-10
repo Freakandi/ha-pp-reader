@@ -1,3 +1,1 @@
-"""
-Core Domain Library for Portfolio Performance.
-"""
+"""Core Domain Library for Portfolio Performance."""
