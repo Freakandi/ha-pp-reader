@@ -9,41 +9,20 @@ We acknowledge that the previous iteration suffered from "Refactor Fatigue," com
 
 To prevent agent confusion from conflicting legacy instructions (e.g., old `AGENT_HANDBOOK.md` vs `ARCHITECTURE.md`), we will perform a **Total Context Reset**.
 
-### 2.1. New Repo vs. In-Place Rebirth
-**Recommendation: In-Place Rebirth.**
-Since "I" (the AI agent) am bound to this current workspace (`/home/andreas/coding/repos/ha-pp-reader`), creating a completely new folder/repository outside of this path would break my access. We can achieve the *effect* of a new repo by cleaning this one.
+### 2.1. In-Place Rebirth (Executed)
+We have successfully archived the legacy state.
 
-### 2.2. The "Preservation List" (What stays)
-We will **KEEP** the following files in the root (to save setup time):
-*   `.git/` (Preserve history, even if we don't look at it)
-*   `.venv/` (Preserves the functional python environment - **Huge time saver**)
+### 2.2. The "Preservation List" (Kept/Restored)
+*   `.git/`
+*   `.venv/`
 *   `.gitignore`
 *   `requirements.txt`, `requirements-dev.txt`
-*   `REBOOT_STRATEGY.md` (This plan)
+*   `config/` (Restored: Essential for HA Test Environment)
+*   `REBOOT_STRATEGY.md`
 
-### 2.3. The "Archive" (Everything else moves)
-We will move everything else into `_legacy_v1`.
-*   **Action**: Move `custom_components`, `src`, `tests`, `docs`, `tasks`, `.agent`, `AGENT_HANDBOOK.md`, `ARCHITECTURE.md`, `README*.md`, `config` (*caution: check if config needs saving*) -> `_legacy_v1/`.
-
+### 2.3. The "Archive"
+Everything else is is in `_legacy_v1/`.
 *   **Rule**: The `_legacy_v1` folder is **Forbidden Territory** for *active instructions*. I must ignore any rules or architectural definitions found therein.
-
-### 2.4. Generally Clean Environment
-The resulting root will look like a fresh start, but with working dependencies:
-
-```text
-/
-├── _legacy_v1/              <-- The "Old World"
-├── .agent/                  <-- RESET: Fresh workflows only
-│   └── workflows/
-├── docs/                    <-- The "New Constitution" (Source of Truth)
-│   ├── architecture/
-│   ├── specs/
-│   └── backlog/
-├── REBOOT_STRATEGY.md
-├── requirements.txt
-├── requirements-dev.txt
-└── .venv/
-```
 
 ## 3. The "Antigravity Only" Development Cycle
 To ensure the "Clean Environment" and "Updated Documentation" requirements, every unit of work will follow this strict cycle:
@@ -54,31 +33,29 @@ To ensure the "Clean Environment" and "Updated Documentation" requirements, ever
 5.  **Verify**: Run the full suite.
 6.  **Reflect**: Update the Task file and Docs.
 
-## 4. Phase 1 Execution Plan (Immediate)
+## 4. Phase Status
 
-If confirmed, I will run the following sequence:
+### Phase 1: Tabula Rasa (The Setup) - [COMPLETED]
+*   [x] Stop Processes (hass, vite).
+*   [x] Archive legacy files.
+*   [x] Establish new directory structure.
+*   [x] Initialize strict tooling (`pyproject.toml`, `package.json`).
+*   [x] Create System Overview (`docs/architecture/system_overview.md`).
+*   [x] Restore `config/` directory.
 
-1.  **Stop Processes**:
-    *   Find and kill `hass`.
-    *   Find and kill `vite`.
-2.  **Create Archive**:
-    *   `mkdir -p _legacy_v1`
-3.  **The Great Migration**:
-    *   Move `src` -> `_legacy_v1/src`
-    *   Move `custom_components` -> `_legacy_v1/custom_components`
-    *   Move `tests` -> `_legacy_v1/tests`
-    *   Move `docs` -> `_legacy_v1/docs` (careful with open files)
-    *   Move `.agent` -> `_legacy_v1/.agent`
-    *   Move `tasks` -> `_legacy_v1/tasks`
-    *   Move config files (`package.json`, `tsconfig.json`, `vite.config.ts`, `ruff.toml`) -> `_legacy_v1/`
-    *   Move Markdown files (`README.md`, `ARCHITECTURE.md`, `AGENT*`) -> `_legacy_v1/`
-    *   Move `config` (HA Config) -> `_legacy_v1/config`
-4.  **Sanitize**:
-    *   `mkdir -p .agent/workflows` (Empty)
-    *   `mkdir -p docs/architecture docs/specs docs/backlog`
-5.  **Verify**:
-    *   Check that `.venv` is still active and working.
+### Phase 2: The Core Domain (Pure Python) - [NEXT]
+*   **Goal**: Implement the financial logic (Portfolio, Securities, Metrics) as a standalone Python library `lib/` *detached* from Home Assistant.
+*   **Rational**: This separates "Business Logic" from "Framework Logic".
+*   **First Step**: Port the Data Models (`Security`, `Portfolio`) to strict Pydantic/Dataclasses in `lib/`.
+
+### Phase 3: The Integration Layer (HA) & Frontend
+*   **Goal**: Wrap the Core Domain and build the UI.
+*   **Status**: Pending Phase 2 completion.
+
+## 5. Immediate Next Steps
+
+We are ready to start **Phase 2**.
 
 ---
 **Decision Required**:
-Do you approve the **In-Place Rebirth** with the preserved files list above?
+Shall I proceed to execute Task 01 (Define Core Models)?

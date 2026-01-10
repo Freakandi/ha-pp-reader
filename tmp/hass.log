@@ -1,7 +1,0 @@
-Error: Another Home Assistant instance is already running!
-  PID: 288910
-  Version: 2025.11.1
-  Started: 2025-11-20 18:55:26 (local time)
-  Config directory: /home/andreas/coding/repos/ha-pp-reader/config
-
-Please stop the existing instance before starting a new one.
