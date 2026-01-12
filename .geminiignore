@@ -2,3 +2,4 @@
 .git/
 __pycache__/
 tmp/
+_legacy_v1/
