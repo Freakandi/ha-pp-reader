@@ -1,0 +1,57 @@
+#!/bin/bash
+set -ex
+
+# Clean up any existing environment to ensure a fresh start
+rm -rf .venv venv-ha node_modules
+
+# Ensure Python 3.13 is available via pyenv (required by HA 2025.11.1)
+if command -v pyenv >/dev/null; then
+    pyenv install -s 3.13.3
+    pyenv local 3.13.3
+    PYTHON_EXEC=$(pyenv which python)
+else
+    PYTHON_EXEC=python3
+fi
+
+# Create virtual environment using specific python
+$PYTHON_EXEC -m venv .venv
+source .venv/bin/activate
+
+# Install dependencies fast using uv (preinstalled in Jules)
+# Syncing ensures exact match with requirements
+uv pip install -r requirements.txt -r requirements-dev.txt
+
+# Install frontend dependencies and build assets
+npm install
+npx playwright install
+npm run build:types
+npm run build
+
+# Ensure Home Assistant configuration exists
+CONFIG_DIR="${PWD}/config"
+mkdir -p "${CONFIG_DIR}"
+
+if [ ! -e "/config" ]; then
+    sudo ln -s "${CONFIG_DIR}" /config
+elif [ -L "/config" ]; then
+    current_target="$(readlink /config)"
+    if [ "${current_target}" != "${CONFIG_DIR}" ]; then
+        sudo rm /config
+        sudo ln -s "${CONFIG_DIR}" /config
+    fi
+elif [ ! -d "/config" ]; then
+    echo "Refusing to overwrite /config because it exists and is not a symlink" >&2
+    exit 1
+fi
+
+hass --script ensure_config --config config
+
+# Run verifiction suites (this confirms the environment works)
+npm run test           # Frontend smoke tests
+pytest -q tests/unit   # Backend unit tests
+
+# Ensure clean git state (Jules requires this for snapshotting)
+# npm install might have touched package-lock.json
+git checkout .
+
+echo "Jules environment setup complete. Activate with: source .venv/bin/activate"
