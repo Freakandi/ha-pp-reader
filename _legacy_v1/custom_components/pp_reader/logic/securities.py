@@ -1,0 +1,1027 @@
+"""
+Provide functions for various calculations.
+
+Holdings, purchase values, and current values of securities
+in a portfolio. Includes utilities for handling transactions,
+exchange rates, and database interactions.
+"""
+
+import logging
+import sqlite3
+from collections import Counter
+from dataclasses import dataclass
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+from custom_components.pp_reader.currencies.fx import (
+    ensure_exchange_rates_for_dates_sync,
+    get_closest_rate_sync,
+    load_latest_rates_sync,
+)
+from custom_components.pp_reader.data.db_access import Transaction
+from custom_components.pp_reader.logic.portfolio import normalize_shares
+from custom_components.pp_reader.util.currency import (
+    MAX_FALLBACK_DAYS_WITHOUT_WARNING,
+    cent_to_eur,
+    normalize_raw_price,
+    round_currency,
+    round_price,
+)
+
+_LOGGER = logging.getLogger(__name__)
+_SCALED_INT_THRESHOLD = 10_000
+
+PURCHASE_TYPES = {0, 2}
+SALE_TYPES = {1, 3}
+
+UNIT_TYPE_NATIVE = 0
+UNIT_TYPE_TAX = 1
+UNIT_TYPE_FEE = 2
+
+SHARE_MATCH_EPSILON = 1e-6
+
+_FX_RATE_FAILURES: Counter[tuple[str, str]] = Counter()
+_MISSING_NATIVE_POSITIONS: Counter[tuple[str, str]] = Counter()
+_DEEP_FALLBACK_WARNED: set[tuple[str, str]] = set()
+
+
+def get_missing_fx_diagnostics() -> dict[str, Any]:
+    """Return a snapshot of accumulated missing FX diagnostics."""
+    rate_failures = [
+        {
+            "currency": currency,
+            "date": date,
+            "occurrences": count,
+        }
+        for (currency, date), count in _FX_RATE_FAILURES.items()
+    ]
+    native_missing = [
+        {
+            "portfolio_uuid": portfolio,
+            "security_uuid": security,
+            "occurrences": count,
+        }
+        for (portfolio, security), count in _MISSING_NATIVE_POSITIONS.items()
+    ]
+
+    return {
+        "rate_lookup_failures": rate_failures,
+        "native_amount_missing": native_missing,
+    }
+
+
+def _record_rate_failure(currency: str | None, tx_date: datetime | None) -> None:
+    """Track missing FX rate lookups grouped by currency and trade date."""
+    if not currency or tx_date is None:
+        return
+
+    _FX_RATE_FAILURES[(currency, tx_date.strftime("%Y-%m-%d"))] += 1
+
+
+def _record_missing_native_position(
+    portfolio_uuid: str | None, security_uuid: str | None
+) -> None:
+    """Track purchases lacking native currency totals by portfolio/security."""
+    if not portfolio_uuid or not security_uuid:
+        return
+
+    _MISSING_NATIVE_POSITIONS[(portfolio_uuid, security_uuid)] += 1
+
+
+@dataclass(slots=True)
+class _NormalizedTransactionAmounts:
+    """Represent normalized monetary figures for a transaction."""
+
+    shares: float
+    gross: float
+    fees: float
+    taxes: float
+    net_trade_account: float
+
+
+def _normalize_transaction_amounts(
+    transaction: Transaction,
+    tx_units: dict[str, Any] | None,
+) -> _NormalizedTransactionAmounts:
+    """Convert raw transaction figures into floats with fee/tax breakdown."""
+    shares = normalize_shares(transaction.shares) if transaction.shares else 0.0
+
+    # Optimize hot path: direct division instead of cent_to_eur helper
+    # Transaction fields are typed int, so we can skip validation/casting overhead.
+    gross = transaction.amount / 100.0 if transaction.amount else 0.0
+    fees = transaction.fees / 100.0 if transaction.fees else 0.0
+    taxes = transaction.taxes / 100.0 if transaction.taxes else 0.0
+
+    if tx_units:
+        units = tx_units.get(transaction.uuid)
+
+        entries: list[dict[str, Any]]
+        if isinstance(units, list):
+            entries = [entry for entry in units if isinstance(entry, dict)]
+        elif isinstance(units, dict):
+            nested = units.get("entries") if "entries" in units else None
+            if isinstance(nested, list):
+                entries = [entry for entry in nested if isinstance(entry, dict)]
+            else:
+                entries = []
+        else:
+            entries = []
+
+        for entry in entries:
+            unit_type_raw = entry.get("type")
+            amount_raw = entry.get("amount")
+
+            try:
+                unit_type = int(unit_type_raw)
+            except (TypeError, ValueError):
+                continue
+
+            if amount_raw is None:
+                continue
+
+            unit_amount = cent_to_eur(amount_raw)
+            if unit_amount is None:
+                continue
+
+            if unit_type == UNIT_TYPE_FEE:
+                fees += unit_amount
+            elif unit_type == UNIT_TYPE_TAX:
+                taxes += unit_amount
+
+    fees = round_currency(fees, default=0.0) or 0.0
+    taxes = round_currency(taxes, default=0.0) or 0.0
+    net_trade_account = round_currency(gross - fees - taxes, default=0.0) or 0.0
+
+    return _NormalizedTransactionAmounts(
+        shares=shares,
+        gross=gross,
+        fees=fees,
+        taxes=taxes,
+        net_trade_account=net_trade_account,
+    )
+
+
+@dataclass(slots=True)
+class PurchaseComputation:
+    """Aggregate purchase metrics for a portfolio security."""
+
+    purchase_value: float
+    avg_price_native: float | None
+    security_currency_total: float = 0.0
+    account_currency_total: float = 0.0
+    avg_price_security: float | None = None
+    avg_price_account: float | None = None
+
+
+@dataclass(slots=True)
+class _HoldingLot:
+    """Represent a FIFO lot tracked during purchase calculations."""
+
+    shares: float
+    price_eur: float
+    timestamp: datetime
+    native_price: float | None = None
+    native_currency: str | None = None
+    security_price: float | None = None
+    security_currency: str | None = None
+    account_price: float | None = None
+    account_currency: str | None = None
+
+
+def _is_relevant_transaction(transaction: Transaction) -> bool:
+    """Return ``True`` when a transaction has both a security and portfolio."""
+    return bool(transaction.security and transaction.portfolio)
+
+
+def _collect_fx_requirements(
+    transactions: list[Transaction],
+) -> tuple[set[datetime], set[str]]:
+    """Collect all non-EUR currencies and their relevant dates."""
+    fx_dates: set[datetime] = set()
+    fx_currencies: set[str] = set()
+
+    for tx in transactions:
+        if _is_relevant_transaction(tx) and tx.currency_code != "EUR":
+            fx_currencies.add(tx.currency_code)
+            fx_dates.add(datetime.fromisoformat(tx.date))
+
+    return fx_dates, fx_currencies
+
+
+def _determine_exchange_rate(
+    transaction: Transaction,
+    tx_date: datetime,
+    db_path: Path,
+    *,
+    missing_logged: set[tuple[str, datetime]] | None = None,
+) -> tuple[float | None, float | None]:
+    """Load the exchange rate for a transaction and expose the raw value."""
+    if transaction.currency_code == "EUR":
+        return 1.0, 1.0
+
+    fx_rates = load_latest_rates_sync(tx_date, db_path)
+    rate = fx_rates.get(transaction.currency_code)
+
+    if not rate:
+        # Try deep fallback
+        fallback = get_closest_rate_sync(
+            db_path,
+            transaction.currency_code,
+            tx_date.strftime("%Y-%m-%d"),
+        )
+        if fallback:
+            rate_val, date_str = fallback
+            rate = rate_val
+
+            # Check age
+            fallback_date = datetime.fromisoformat(date_str).date()
+            tx_date_only = tx_date.date()
+            age_days = (tx_date_only - fallback_date).days
+
+            if age_days > MAX_FALLBACK_DAYS_WITHOUT_WARNING:
+                warn_key = (transaction.currency_code, date_str)
+                if warn_key not in _DEEP_FALLBACK_WARNED:
+                    _DEEP_FALLBACK_WARNED.add(warn_key)
+                    _LOGGER.warning(
+                        "Veralteter Wechselkurs (Transaktion): %s für %s "
+                        "am %s (%d Tage alt > %d)",
+                        transaction.currency_code,
+                        date_str,
+                        tx_date.strftime("%Y-%m-%d"),
+                        age_days,
+                        MAX_FALLBACK_DAYS_WITHOUT_WARNING,
+                    )
+            else:
+                # Debug logging for fallback usage? Maybe too noisy.
+                pass
+
+    if not rate:
+        if missing_logged is None:
+            missing_logged = set()
+
+        key = (transaction.currency_code, tx_date)
+        if key not in missing_logged:
+            missing_logged.add(key)
+            _record_rate_failure(transaction.currency_code, tx_date)
+            _LOGGER.warning(
+                "Kein Wechselkurs gefunden (auch kein Fallback): Datum=%s, Währung=%s",
+                tx_date.strftime("%Y-%m-%d"),
+                transaction.currency_code,
+            )
+        return None, None
+
+    return rate, rate
+
+
+def _apply_sale_fifo(
+    existing_holdings: list[_HoldingLot],
+    shares_to_sell: float,
+) -> list[_HoldingLot]:
+    """Reduce holdings using FIFO when selling shares."""
+    remaining_to_sell = shares_to_sell
+    updated_positions: list[_HoldingLot] = []
+
+    for lot in existing_holdings:
+        qty = lot.shares
+        if remaining_to_sell <= 0:
+            updated_positions.append(lot)
+            continue
+
+        if qty > remaining_to_sell:
+            updated_positions.append(
+                _HoldingLot(
+                    shares=qty - remaining_to_sell,
+                    price_eur=lot.price_eur,
+                    timestamp=lot.timestamp,
+                    native_price=lot.native_price,
+                    native_currency=lot.native_currency,
+                    security_price=lot.security_price,
+                    security_currency=lot.security_currency,
+                    account_price=lot.account_price,
+                    account_currency=lot.account_currency,
+                )
+            )
+            remaining_to_sell = 0
+        else:
+            remaining_to_sell -= qty
+
+    return updated_positions
+
+
+def db_calculate_current_holdings(
+    transactions: list[Transaction],
+) -> dict[tuple[str, str], float]:
+    """
+    Berechne die aktuell gehaltene Anzahl pro Wertpapier und Depot.
+
+    Args:
+        transactions (list[Transaction]): Liste aller Transaktionen aus der Datenbank.
+
+    Returns:
+        Dict[Tuple[str, str], float]: Ein Dictionary mit Depot-UUID
+            (`portfolio_uuid`) und Wertpapier-UUID (`security_uuid`), das den
+            aktuellen Beständen (`current_holdings`) zugeordnet ist.
+
+    """
+    portfolio_securities_holdings: dict[tuple[str, str], float] = {}
+
+    for tx in transactions:
+        if not tx.security or not tx.portfolio:
+            continue  # Überspringe Transaktionen ohne Wertpapier oder Depot
+
+        key = (tx.portfolio, tx.security)
+        shares = (
+            normalize_shares(tx.shares) if tx.shares else 0
+        )  # Wende normalize_shares an
+
+        # Transaktionstypen auswerten
+        if tx.type in (0, 2):  # PURCHASE, INBOUND_DELIVERY
+            portfolio_securities_holdings[key] = (
+                portfolio_securities_holdings.get(key, 0) + shares
+            )
+        elif tx.type in (1, 3):  # SALE, OUTBOUND_DELIVERY
+            portfolio_securities_holdings[key] = (
+                portfolio_securities_holdings.get(key, 0) - shares
+            )
+
+    # Entferne Einträge mit einem Bestand von 0 oder weniger
+    return {key: qty for key, qty in portfolio_securities_holdings.items() if qty > 0}
+
+
+def _resolve_native_amount(  # noqa: PLR0912
+    transaction: Transaction,
+    tx_units: dict[str, Any] | None,
+) -> tuple[float | None, str | None, float | None]:
+    """Return native and account amounts for ``transaction_units`` metadata."""
+    if not tx_units:
+        return None, None, None
+
+    units = tx_units.get(transaction.uuid)
+    if not units:
+        return None, None, None
+
+    entries: list[dict[str, Any]] = []
+    fallback_unit: dict[str, Any] | None = None
+    if isinstance(units, list):
+        entries = [entry for entry in units if isinstance(entry, dict)]
+    elif isinstance(units, dict):
+        nested = units.get("entries") if "entries" in units else None
+        if isinstance(nested, list):
+            entries = [entry for entry in nested if isinstance(entry, dict)]
+        else:
+            fallback_unit = units
+    else:
+        return None, None, None
+
+    native_amount: float | None = None
+    native_currency: str | None = None
+    account_amount: float | None = None
+
+    for entry in entries:
+        unit_type_raw = entry.get("type")
+        unit_type = _safe_int(unit_type_raw)
+        if unit_type != UNIT_TYPE_NATIVE:
+            continue
+
+        account_amount = _apply_cent_value(entry.get("amount"), account_amount)
+        native_amount = _apply_cent_value(entry.get("fx_amount"), native_amount)
+
+        currency = entry.get("fx_currency_code")
+        if isinstance(currency, str):
+            native_currency = currency
+
+        if native_amount is not None and account_amount is not None:
+            break
+
+    if native_amount is None and fallback_unit:
+        simple_fx_amount = fallback_unit.get("fx_amount")
+        converted_native = cent_to_eur(simple_fx_amount)
+        if converted_native is not None:
+            native_amount = converted_native
+
+        if native_currency is None:
+            currency = fallback_unit.get("fx_currency_code")
+            if isinstance(currency, str):
+                native_currency = currency
+
+        if account_amount is None:
+            account_amount = _apply_cent_value(
+                fallback_unit.get("amount"),
+                account_amount,
+            )
+
+    return native_amount, native_currency, account_amount
+
+
+def _apply_cent_value(value: Any, current: float | None) -> float | None:
+    """Convert an optional cent value to EUR, preserving an existing value."""
+    if current is not None:
+        return current
+    converted = cent_to_eur(value)
+    return converted if converted is not None else current
+
+
+def _safe_int(value: Any) -> int | None:
+    """Best-effort int conversion."""
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def db_calculate_sec_purchase_value(  # noqa: PLR0912, PLR0915, C901
+    transactions: list[Transaction],
+    db_path: Path,
+    *,
+    tx_units: dict[str, Any] | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> dict[tuple[str, str], PurchaseComputation]:
+    """Berechne den gesamten Kaufpreis und native Durchschnittspreise (FIFO)."""
+    portfolio_metrics: dict[tuple[str, str], PurchaseComputation] = {}
+    holdings: dict[tuple[str, str], list[_HoldingLot]] = {}
+
+    fx_dates, fx_currencies = _collect_fx_requirements(transactions)
+    if fx_currencies:
+        ensure_exchange_rates_for_dates_sync(
+            list(fx_dates), fx_currencies, db_path, conn=conn
+        )
+
+    missing_rates_logged: set[tuple[str, datetime]] = set()
+    missing_native_logs: set[tuple[str, str]] = set()
+
+    for tx in transactions:
+        if not _is_relevant_transaction(tx):
+            continue
+
+        key = (tx.portfolio, tx.security)
+        normalized = _normalize_transaction_amounts(tx, tx_units)
+        shares = normalized.shares
+        tx_date = datetime.fromisoformat(tx.date)
+        native_amount: float | None = None
+        native_currency: str | None = None
+        native_account_amount: float | None = None
+        if tx.type in PURCHASE_TYPES:
+            native_amount, native_currency, native_account_amount = (
+                _resolve_native_amount(
+                    tx,
+                    tx_units,
+                )
+            )
+        rate, _ = _determine_exchange_rate(
+            tx,
+            tx_date,
+            db_path,
+            missing_logged=missing_rates_logged,
+        )
+
+        if not rate:
+            skip_tx = True
+            if tx.type in SALE_TYPES or (
+                tx.type in PURCHASE_TYPES and native_amount is not None
+            ):
+                skip_tx = False
+
+            if skip_tx:
+                if (
+                    tx.type in PURCHASE_TYPES
+                    and native_amount is None
+                    and tx.portfolio
+                    and tx.security
+                ):
+                    warn_key = (tx.portfolio, tx.security)
+                    if warn_key not in missing_native_logs:
+                        missing_native_logs.add(warn_key)
+                        _record_missing_native_position(tx.portfolio, tx.security)
+                        _LOGGER.warning(
+                            (
+                                "Keine nativen Kaufdaten für Portfolio=%s, Security=%s "
+                                "(Transaktion %s). Bitte manuell prüfen."
+                            ),
+                            tx.portfolio,
+                            tx.security,
+                            tx.uuid,
+                        )
+                continue
+
+        if tx.type in PURCHASE_TYPES:
+            if shares <= 0:
+                continue
+            account_total = (
+                native_account_amount
+                if native_account_amount is not None
+                else normalized.net_trade_account
+            )
+            account_price = account_total / shares if shares > 0 else None
+            price_per_share_eur = (
+                account_price / rate if account_price is not None and rate else 0.0
+            )
+            security_total = native_amount
+            security_currency = native_currency
+            if security_total is None:
+                if native_currency and native_currency != tx.currency_code:
+                    security_total = None
+                else:
+                    security_total = account_total
+                    security_currency = security_currency or tx.currency_code
+            security_price = (
+                security_total / shares
+                if security_total is not None and shares > 0
+                else None
+            )
+            native_price = None
+            if native_amount is not None and shares > 0:
+                native_price = native_amount / shares
+
+            new_lot = _HoldingLot(
+                shares=shares,
+                price_eur=price_per_share_eur,
+                timestamp=tx_date,
+                native_price=native_price,
+                native_currency=native_currency,
+                security_price=security_price,
+                security_currency=security_currency,
+                account_price=account_price,
+                account_currency=tx.currency_code,
+            )
+            if key in holdings:
+                holdings[key].append(new_lot)
+            else:
+                holdings[key] = [new_lot]
+
+        elif tx.type in SALE_TYPES:
+            shares_to_sell = abs(shares)
+            if shares_to_sell <= 0:
+                continue
+
+            current_holdings = holdings.get(key)
+            if current_holdings:
+                holdings[key] = _apply_sale_fifo(current_holdings, shares_to_sell)
+
+    for key, positions in holdings.items():
+        total_purchase = sum(
+            lot.shares * lot.price_eur for lot in positions if lot.shares > 0
+        )
+        total_shares = sum(lot.shares for lot in positions if lot.shares > 0)
+
+        avg_price_native: float | None = None
+        native_total = 0.0
+        native_shares = 0.0
+        security_total = 0.0
+        security_shares = 0.0
+        account_total = 0.0
+        account_shares = 0.0
+        for lot in positions:
+            if lot.shares <= 0:
+                continue
+            if lot.native_price is not None:
+                native_total += lot.shares * lot.native_price
+                native_shares += lot.shares
+            if lot.security_price is not None:
+                security_total += lot.shares * lot.security_price
+                security_shares += lot.shares
+            if lot.account_price is not None:
+                account_total += lot.shares * lot.account_price
+                account_shares += lot.shares
+
+        if (
+            total_shares > 0
+            and native_shares
+            and abs(native_shares - total_shares) <= SHARE_MATCH_EPSILON
+        ):
+            avg_price_native = round(native_total / native_shares, 6)
+
+        avg_price_security: float | None = None
+        if (
+            security_shares
+            and abs(security_shares - total_shares) <= SHARE_MATCH_EPSILON
+        ):
+            avg_price_security = round(security_total / security_shares, 6)
+
+        avg_price_account: float | None = None
+        if account_shares and abs(account_shares - total_shares) <= SHARE_MATCH_EPSILON:
+            avg_price_account = round(account_total / account_shares, 6)
+
+        portfolio_metrics[key] = PurchaseComputation(
+            purchase_value=round(total_purchase, 2),
+            avg_price_native=avg_price_native,
+            security_currency_total=round(security_total, 2)
+            if security_shares
+            else 0.0,
+            account_currency_total=round(account_total, 2) if account_shares else 0.0,
+            avg_price_security=avg_price_security,
+            avg_price_account=avg_price_account,
+        )
+
+    return portfolio_metrics
+
+
+def db_calculate_holdings_value(
+    db_path: Path,
+    conn: sqlite3.Connection,
+    current_hold_pur: dict[tuple[str, str], dict[str, float]],
+) -> dict[tuple[str, str], dict[str, float]]:
+    """Berechne den aktuellen Wert (``current_value``) für alle Positionen."""
+    # Sammle alle benötigten Währungen
+    needed_currencies = set()
+    cur = conn.cursor()
+
+    for _portfolio_uuid, security_uuid in current_hold_pur:
+        cur.execute(
+            """
+            SELECT currency_code FROM securities WHERE uuid = ?
+        """,
+            (security_uuid,),
+        )
+        currency_row = cur.fetchone()
+        currency_code = currency_row[0] if currency_row else "EUR"
+
+        if currency_code != "EUR":
+            needed_currencies.add(currency_code)
+
+    # Stelle sicher, dass die Wechselkurse verfügbar sind
+    # Stelle sicher, dass die Wechselkurse verfügbar sind
+    today = datetime.now()  # noqa: DTZ005
+    ensure_exchange_rates_for_dates_sync([today], needed_currencies, db_path, conn=conn)
+
+    # Lade die Wechselkurse
+    fx_rates = load_latest_rates_sync(today, db_path)
+
+    # Lade die aktuellen Preise der Wertpapiere aus der Tabelle "securities"
+    cur.execute("SELECT uuid, last_price FROM securities")
+    latest_prices = {row[0]: row[1] for row in cur.fetchall()}
+
+    # Lade die Währungen der Wertpapiere
+    cur.execute("SELECT uuid, currency_code FROM securities")
+    securities = {row[0]: row[1] for row in cur.fetchall()}
+
+    # Berechne den aktuellen Wert für jede Position
+    for (portfolio_uuid, security_uuid), data in current_hold_pur.items():
+        holdings = data.get("current_holdings", 0)
+        # current_holdings kann bereits skaliert (10^-8) oder normalisiert sein.
+        if (
+            isinstance(holdings, (int, float))
+            and abs(holdings) >= _SCALED_INT_THRESHOLD
+        ):
+            holdings = holdings / 10**8
+
+        # Hole den aktuellen Preis
+        latest_price = normalize_raw_price(latest_prices.get(security_uuid, 0.0))
+
+        # Hole die Währung
+        currency_code = securities.get(security_uuid, "EUR")
+
+        if currency_code != "EUR":
+            rate = fx_rates.get(currency_code)
+            if rate:
+                latest_price /= rate  # Wende den Wechselkurs an
+            else:
+                _LOGGER.warning(
+                    "Kein Wechselkurs für %s gefunden. Überspringe Berechnung.",
+                    currency_code,
+                )
+                data["current_value"] = None
+                continue  # Überspringe die Berechnung für diese Währung
+        else:
+            rate = 1.0  # Für EUR ist der Wechselkurs immer 1.0
+
+        # Berechne den aktuellen Wert
+        current_value = holdings * latest_price
+        current_hold_pur[(portfolio_uuid, security_uuid)]["current_value"] = round(
+            current_value, 2
+        )
+
+    return current_hold_pur
+
+
+@dataclass(slots=True)
+class RealizedPerformanceLot:
+    """Represents a single realized gain/loss event (a sell)."""
+
+    date: str
+    shares: float
+    sell_price: float
+    sell_price_native: float | None
+    purchase_value_gross: float
+    sales_value_gross: float
+    sales_value_net: float
+    result_abs: float
+    result_pct: float
+    since_sell_abs: float = 0.0
+    since_sell_pct: float = 0.0
+
+
+@dataclass(slots=True)
+class RealizedPerformanceResult:
+    """Aggregated realized performance for a single security."""
+
+    security_uuid: str
+    name: str
+    currency_code: str
+    ticker_symbol: str | None
+    current_price: float | None
+    current_holdings: float
+    last_sell_price: float
+    last_sell_price_native: float | None
+    purchase_value_gross: float  # Total cost basis of ALL sold shares
+    sales_value_gross: float  # Total gross proceeds
+    sales_value_net: float  # Total net proceeds
+    result_abs: float
+    result_pct: float
+    lots: list[RealizedPerformanceLot]
+    total_sold_shares: float
+    last_sell_date: str
+    since_sell_abs: float = 0.0
+    since_sell_pct: float = 0.0
+    current_price_eur: float | None = None  # Helper for debugging/frontend
+
+
+def calculate_realized_performance(  # noqa: PLR0912, PLR0915, C901
+    transactions: list[Transaction],
+    db_path: Path,
+    *,
+    tx_units: dict[str, Any] | None = None,
+    conn: sqlite3.Connection | None = None,
+) -> list[RealizedPerformanceResult]:
+    """Calculate realized performance for all sold positions using FIFO."""
+    purchase_queue: dict[str, list[_HoldingLot]] = {}
+    realized_gains: dict[str, list[RealizedPerformanceLot]] = {}
+    security_info: dict[str, dict[str, Any]] = {}
+
+    if conn is None:
+        # Create a temporary connection if one isn't provided
+        db_conn = sqlite3.connect(db_path)
+        db_conn.row_factory = sqlite3.Row
+        cur = db_conn.cursor()
+    else:
+        cur = conn.cursor()
+
+    try:
+        cur.execute(
+            "SELECT uuid, name, currency_code, ticker_symbol, last_price "
+            "FROM securities"
+        )
+        for row in cur.fetchall():
+            security_info[row["uuid"]] = {
+                "name": row["name"],
+                "currency_code": row["currency_code"],
+                "ticker_symbol": row["ticker_symbol"],
+                "current_price": normalize_raw_price(row["last_price"]),
+            }
+    finally:
+        if conn is None:
+            db_conn.close()
+
+    # Collect needed FX rates for both transaction currency
+    # and security currency (if different)
+    needed_currencies = set()
+    for tx in transactions:
+        if tx.currency_code != "EUR":
+            needed_currencies.add(tx.currency_code)
+
+        # Need to check security currency as well, but tx doesn't have it directly.
+        # We'll rely on what we collected in security_info, but that's static.
+        # We can iterate unique securities in transactions.
+        if tx.security and tx.security in security_info:
+            sec_ccy = security_info[tx.security]["currency_code"]
+            if sec_ccy != "EUR":
+                needed_currencies.add(sec_ccy)
+
+    dates = {datetime.fromisoformat(tx.date) for tx in transactions}
+
+    if needed_currencies:
+        ensure_exchange_rates_for_dates_sync(
+            list(dates), list(needed_currencies), db_path
+        )
+
+    # -------------------------------------------------------------------------
+    # NEW: Load LATEST exchange rates (today) to convert current_price -> EUR
+    # -------------------------------------------------------------------------
+    today = datetime.now()  # noqa: DTZ005
+    ensure_exchange_rates_for_dates_sync([today], list(needed_currencies), db_path)
+    latest_rates = load_latest_rates_sync(today, db_path)
+    # -------------------------------------------------------------------------
+
+    missing_rates_logged: set[tuple[str, datetime]] = set()
+
+    # First pass: Process all transactions to populate purchase queue and realized gains
+    for tx in sorted(transactions, key=lambda t: t.date):
+        if not tx.security:
+            continue
+
+        key = tx.security
+        normalized = _normalize_transaction_amounts(tx, tx_units)
+        shares = normalized.shares
+        tx_date = datetime.fromisoformat(tx.date)
+
+        # Rate for converting Transaction Amount to EUR
+        rate, _ = _determine_exchange_rate(
+            tx, tx_date, db_path, missing_logged=missing_rates_logged
+        )
+        if not rate:
+            continue  # Skip transactions where FX rate is missing
+
+        if tx.type in PURCHASE_TYPES:
+            if shares <= 0:
+                continue
+
+            price_per_share_eur = (
+                (normalized.net_trade_account / shares) / rate if shares > 0 else 0.0
+            )
+
+            new_lot = _HoldingLot(
+                shares=shares,
+                price_eur=price_per_share_eur,
+                timestamp=tx_date,
+            )
+            if key in purchase_queue:
+                purchase_queue[key].append(new_lot)
+            else:
+                purchase_queue[key] = [new_lot]
+
+        elif tx.type in SALE_TYPES:
+            shares_to_sell = abs(shares)
+            if shares_to_sell <= 0:
+                continue
+
+            lots = purchase_queue.get(key)
+            if not lots:
+                # Nothing to sell or key missing
+                continue
+
+            cost_basis_sold = 0.0
+            remaining_to_sell = shares_to_sell
+            consumed_lots_indices = []
+
+            for i, lot in enumerate(lots):
+                if remaining_to_sell <= 0:
+                    break
+
+                shares_from_lot = min(lot.shares, remaining_to_sell)
+                cost_basis_sold += shares_from_lot * lot.price_eur
+                lot.shares -= shares_from_lot
+                remaining_to_sell -= shares_from_lot
+
+                if lot.shares < SHARE_MATCH_EPSILON:
+                    consumed_lots_indices.append(i)
+
+            # Clean up consumed lots
+            if consumed_lots_indices:
+                purchase_queue[key] = [
+                    lot for i, lot in enumerate(lots) if i not in consumed_lots_indices
+                ]
+
+            # Amount (normalized.gross) is Net Inflow (Credit) for Sales.
+            # True Gross (Market Value) = Amount + Fees + Taxes
+            # Note: normalized.gross, fees, and taxes are already scaled (cents -> unit)
+            # but NOT FX converted if the transaction currency != EUR.
+            # `rate` handles Tx Currency -> EUR conversion.
+
+            # Gross Market Value in Native (Transaction) Currency
+            sales_value_gross_native = (
+                abs(normalized.gross) + normalized.fees + normalized.taxes
+            )
+
+            # Convert to EUR
+            sales_value_gross = sales_value_gross_native / rate
+
+            # Net Value is just the amount (already Net Inflow)
+            sales_value_net = abs(normalized.gross) / rate
+
+            result_abs = sales_value_net - cost_basis_sold
+            result_pct = (
+                (result_abs / cost_basis_sold) * 100 if cost_basis_sold > 0 else 0.0
+            )
+
+            sell_price = sales_value_gross / shares_to_sell if shares_to_sell > 0 else 0
+
+            # Calculate native sell price
+            sell_price_native = None
+            if key in security_info:
+                sec_ccy = security_info[key]["currency_code"]
+                if sec_ccy == "EUR":
+                    sell_price_native = sell_price
+                else:
+                    # Get rate for security currency
+                    # We need to manually load it since _determine_exchange_rate
+                    # works on Transaction
+                    fx_rates = load_latest_rates_sync(tx_date, db_path)
+                    sec_rate = fx_rates.get(sec_ccy)
+                    if sec_rate:
+                        sell_price_native = sell_price * sec_rate
+
+            new_gain = RealizedPerformanceLot(
+                date=tx_date.strftime("%Y-%m-%d"),
+                shares=shares_to_sell,
+                sell_price=round_price(sell_price),
+                sell_price_native=(
+                    round_price(sell_price_native)
+                    if sell_price_native is not None
+                    else None
+                ),
+                purchase_value_gross=round_currency(cost_basis_sold),
+                sales_value_gross=round_currency(sales_value_gross),
+                sales_value_net=round_currency(sales_value_net),
+                result_abs=round_currency(result_abs),
+                result_pct=round_currency(result_pct, decimals=2),
+            )
+            if key in realized_gains:
+                realized_gains[key].append(new_gain)
+            else:
+                realized_gains[key] = [new_gain]
+
+    # Second pass: Aggregate results
+    aggregated_results: list[RealizedPerformanceResult] = []
+    current_holdings = db_calculate_current_holdings(transactions)
+
+    for sec_uuid, lots in realized_gains.items():
+        if not lots:
+            continue
+
+        info = security_info.get(sec_uuid, {})
+        security_currency = info.get("currency_code", "EUR")
+        current_price_native = info.get("current_price")
+
+        # Calculate current_price_eur
+        current_price_eur = current_price_native
+        if current_price_native is not None and security_currency != "EUR":
+            rate = latest_rates.get(security_currency)
+            current_price_eur = current_price_native / rate if rate else None
+
+        # Re-process lots to calculate since_sell metrics
+        updated_lots: list[RealizedPerformanceLot] = []
+        for lot in lots:
+            s_abs = 0.0
+            s_pct = 0.0
+            if current_price_eur is not None and lot.sell_price > 0:
+                delta = current_price_eur - lot.sell_price
+                s_abs = delta * lot.shares
+                s_pct = delta / lot.sell_price
+
+            updated_lots.append(
+                RealizedPerformanceLot(
+                    date=lot.date,
+                    shares=lot.shares,
+                    sell_price=lot.sell_price,
+                    sell_price_native=lot.sell_price_native,
+                    purchase_value_gross=lot.purchase_value_gross,
+                    sales_value_gross=lot.sales_value_gross,
+                    sales_value_net=lot.sales_value_net,
+                    result_abs=lot.result_abs,
+                    result_pct=lot.result_pct,
+                    since_sell_abs=round_currency(s_abs),
+                    since_sell_pct=round_currency(s_pct, decimals=4),
+                )
+            )
+
+        total_purchase_gross = sum(lot.purchase_value_gross for lot in lots)
+        total_sales_gross = sum(lot.sales_value_gross for lot in lots)
+        total_sales_net = sum(lot.sales_value_net for lot in lots)
+        total_result_abs = total_sales_net - total_purchase_gross
+        total_result_pct = (
+            (total_result_abs / total_purchase_gross) * 100
+            if total_purchase_gross > 0
+            else 0.0
+        )
+
+        # Find aggregation of holdings across all portfolios
+        holdings_qty = sum(
+            qty
+            for (p_uuid, s_uuid), qty in current_holdings.items()
+            if s_uuid == sec_uuid
+        )
+
+        total_sold_shares = sum(lot.shares for lot in lots)
+
+        # Aggregated since_sell matches logic of Last Lot (as requested previously)
+        agg_since_sell_abs = 0.0
+        agg_since_sell_pct = 0.0
+        if updated_lots:
+            agg_since_sell_abs = updated_lots[-1].since_sell_abs
+            agg_since_sell_pct = updated_lots[-1].since_sell_pct
+
+        aggregated_results.append(
+            RealizedPerformanceResult(
+                security_uuid=sec_uuid,
+                name=info.get("name", "Unknown"),
+                currency_code=security_currency,
+                ticker_symbol=info.get("ticker_symbol"),
+                current_price=current_price_native,
+                current_holdings=round_currency(holdings_qty, decimals=6),
+                last_sell_price=lots[-1].sell_price,
+                last_sell_price_native=lots[-1].sell_price_native,
+                purchase_value_gross=round_currency(total_purchase_gross),
+                sales_value_gross=round_currency(total_sales_gross),
+                sales_value_net=round_currency(total_sales_net),
+                result_abs=round_currency(total_result_abs),
+                result_pct=round_currency(total_result_pct, decimals=2),
+                lots=updated_lots,
+                total_sold_shares=round_currency(total_sold_shares, decimals=6),
+                last_sell_date=lots[-1].date,
+                since_sell_abs=agg_since_sell_abs,
+                since_sell_pct=agg_since_sell_pct,
+                current_price_eur=current_price_eur,
+            )
+        )
+
+    return sorted(aggregated_results, key=lambda x: x.name)

@@ -46,4 +46,8 @@ custom_components/pp_reader/www/pp_reader_dashboard/js/*.js
 custom_components/pp_reader/www/pp_reader_dashboard/js/*.js.map
 !custom_components/pp_reader/www/pp_reader_dashboard/js/dashboard.module.js
 .prompts
-_legacy_v1/
+!_legacy_v1/custom_components
+!_legacy_v1/datamodel
+!_legacy_v1/docs
+!_legacy_v1/src
+!_legacy_v1/types

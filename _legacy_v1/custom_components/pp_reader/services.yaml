@@ -1,0 +1,4 @@
+trigger_backup_debug:
+  name: Manuelles Backup auslösen
+  description: Löst ein manuelles Backup der SQLite-Datenbank aus.
+  fields: {}

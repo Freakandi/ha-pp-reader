@@ -1,0 +1,229 @@
+"""
+YahooQuery Provider für Live-Preise.
+
+Implementiert das PriceProvider-Protokoll mittels `yahooquery` (blocking API).
+Eigenschaften:
+- CHUNK_SIZE=50 (Orchestrator chunked Symbole vor Aufruf; doppelte Sicherheit).
+- Lazy Import von `yahooquery` im Executor (ImportError wird geloggt und
+  führt zu leerem Resultat).
+- Filter: Nur Quotes mit `regularMarketPrice > 0`.
+- Fehlertolerant: Fehler im Batch → WARN + Rückgabe {} (Chunk komplett
+  verworfen).
+- Keine Persistenz / DB-Logik hier. Reine Quote-Erhebung & Mapping.
+
+Feld-Mapping:
+    regularMarketPrice            -> price
+    regularMarketPreviousClose    -> previous_close
+    currency                      -> currency
+    regularMarketVolume           -> volume
+    marketCap                     -> market_cap
+    fiftyTwoWeekHigh              -> high_52w
+    fiftyTwoWeekLow               -> low_52w
+    trailingAnnualDividendYield   -> dividend_yield
+    regularMarketTime             -> ts (fallback: Fetch-Timestamp)
+
+Nicht vorhandene Felder -> None.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import logging
+import time
+from collections.abc import Callable
+from importlib import import_module
+from typing import TYPE_CHECKING, Any
+
+from .provider_base import PriceProvider, Quote
+
+_LOGGER = logging.getLogger(__name__)
+
+# Preferred Yahoo chunk size; orchestrator already chunks, this is a guardrail.
+CHUNK_SIZE = 50
+_YAHOOQUERY_IMPORT_ERROR = False  # Merkt einmaligen Importfehler (kein Spam)
+_YAHOO_DNS_ERROR_TOKENS = (
+    "Could not resolve host: guce.yahoo.com",
+    "Could not resolve host: consent.yahoo.com",
+    "Could not resolve host: query2.finance.yahoo.com",
+    "Could not resolve host: finance.yahoo.com",
+)
+_YAHOOQUERY_DNS_WARNED: set[str] = set()
+_DNS_RETRY_DELAY = 0.4
+
+
+if TYPE_CHECKING:  # pragma: no cover - nur für Type Checker relevant
+    from yahooquery import Ticker
+
+TickerFactory = Callable[..., "Ticker"]
+
+
+def has_import_error() -> bool:
+    """Expose globalen Importfehler-Status für Orchestrator (Feature-Deaktivierung)."""
+    return _YAHOOQUERY_IMPORT_ERROR
+
+
+def _select_quote_timestamp(raw_quote: dict[str, Any], fallback_ts: float) -> float:
+    """Pick a provider-supplied market timestamp if present; else fall back."""
+    candidates = (
+        raw_quote.get("regularMarketTime"),
+        raw_quote.get("postMarketTime"),
+    )
+    for candidate in candidates:
+        try:
+            ts_val = float(candidate)
+        except (TypeError, ValueError):
+            continue
+        if ts_val > 0:
+            return ts_val
+    return fallback_ts
+
+
+def _fetch_quotes_blocking(symbols: list[str]) -> dict:
+    """
+    Blocking Helper für Executor.
+
+    Führt Import und Fetch synchron aus. Gibt das rohe .quotes Dict zurück
+    oder wirft eine Exception weiter.
+    """
+    global _YAHOOQUERY_IMPORT_ERROR  # noqa: PLW0603
+
+    ticker_factory: TickerFactory | None = None
+    try:
+        yahooquery_module = import_module("yahooquery")
+    except ImportError as exc:
+        if not _YAHOOQUERY_IMPORT_ERROR:
+            _LOGGER.debug(
+                "YahooQuery Import fehlgeschlagen (wird deaktiviert): %s", exc
+            )
+            _YAHOOQUERY_IMPORT_ERROR = True
+        return {}
+
+    try:
+        ticker_factory = yahooquery_module.Ticker
+    except AttributeError as exc:
+        if not _YAHOOQUERY_IMPORT_ERROR:
+            _LOGGER.debug(
+                "YahooQuery Ticker nicht verfügbar (wird deaktiviert): %s", exc
+            )
+            _YAHOOQUERY_IMPORT_ERROR = True
+        return {}
+
+    # Defensive Begrenzung (falls Orchestrator nicht chunked)
+    if len(symbols) > CHUNK_SIZE:
+        symbols = symbols[:CHUNK_SIZE]
+
+    def _fetch_once() -> dict:
+        tk = ticker_factory(symbols, asynchronous=False)
+        return getattr(tk, "quotes", {}) or {}
+
+    try:
+        return _fetch_once()
+    except Exception as exc:  # noqa: BLE001 - yahooquery wirft diverse Exceptions
+        if _handle_yahoo_dns_error(exc):
+            time.sleep(_DNS_RETRY_DELAY)
+            try:
+                return _fetch_once()
+            except Exception as retry_exc:  # noqa: BLE001
+                if not _handle_yahoo_dns_error(retry_exc):
+                    _LOGGER.warning("YahooQuery Chunk-Fetch Fehler: %s", retry_exc)
+                return {}
+        _LOGGER.warning("YahooQuery Chunk-Fetch Fehler: %s", exc)
+        return {}
+
+
+class YahooQueryProvider(PriceProvider):
+    """Implementierung des YahooQuery PriceProviders."""
+
+    source = "yahoo"
+
+    async def fetch(self, symbols: list[str]) -> dict[str, Quote]:
+        """
+        Lädt Quotes für übergebene Symbole.
+
+        Rückgabe:
+            Dict[symbol, Quote] - nur für akzeptierte (price > 0) Einträge.
+            Bei Fehler im gesamten Chunk: leeres Dict (Caller wertet als Fehler).
+        """
+        if not symbols:
+            return {}
+
+        loop = asyncio.get_running_loop()
+        try:
+            raw_quotes: dict = await loop.run_in_executor(
+                None, _fetch_quotes_blocking, symbols
+            )
+        except Exception:  # noqa: BLE001 - Executor Exceptions sollen abgefangen werden
+            _LOGGER.warning(
+                "Unerwarteter Fehler beim YahooQuery Executor-Aufruf", exc_info=True
+            )
+            return {}
+
+        if not raw_quotes:
+            # Leerer Chunk -> bereits im Blocking-Helper geloggt (Import-/Fetch-Problem)
+            return {}
+
+        result: dict[str, Quote] = {}
+        fetch_ts = time.time()
+
+        for sym in symbols:
+            data = raw_quotes.get(sym)
+            if not data:
+                _LOGGER.debug(
+                    "YahooQuery: skip symbol=%s (keine Daten im Resultat)", sym
+                )
+                continue
+
+            price = data.get("regularMarketPrice")
+            if price is None or price <= 0:
+                _LOGGER.debug("Verwerfe Symbol %s: ungültiger Preis=%s", sym, price)
+                continue
+
+            quote = Quote(
+                symbol=sym,
+                price=price,
+                previous_close=data.get("regularMarketPreviousClose"),
+                currency=data.get("currency"),
+                volume=data.get("regularMarketVolume"),
+                market_cap=data.get("marketCap"),
+                high_52w=data.get("fiftyTwoWeekHigh"),
+                low_52w=data.get("fiftyTwoWeekLow"),
+                dividend_yield=data.get("trailingAnnualDividendYield"),
+                ts=_select_quote_timestamp(data, fetch_ts),
+                source=self.source,
+            )
+            result[sym] = quote
+            _LOGGER.debug(
+                "YahooQuery: accept symbol=%s price=%s currency=%s",
+                sym,
+                price,
+                quote.currency,
+            )
+
+        if _LOGGER.isEnabledFor(logging.DEBUG):
+            skipped = [s for s in symbols if s not in result]
+            if skipped:
+                _LOGGER.debug(
+                    "YahooQuery: summary skipped=%s accepted=%s/%s",
+                    skipped,
+                    len(result),
+                    len(symbols),
+                )
+
+        return result
+
+
+def _handle_yahoo_dns_error(exc: Exception) -> bool:
+    """Detect DNS failures hitting Yahoo consent hosts and log once."""
+    message = str(exc)
+
+    for token in _YAHOO_DNS_ERROR_TOKENS:
+        if token in message:
+            if token not in _YAHOOQUERY_DNS_WARNED:
+                _LOGGER.warning(
+                    "YahooQuery Quotes DNS-Fehler erkannt (%s). "
+                    "Bitte Netzwerk/DNS prüfen; Fetch wird erneut versucht.",
+                    token,
+                )
+                _YAHOOQUERY_DNS_WARNED.add(token)
+            return True
+    return False
