@@ -1,0 +1,1 @@
+{"version":3,"file":"tab_control.d.ts","sourceRoot":"","sources":["../../src/interaction/tab_control.ts"],"names":[],"mappings":"AAAA;;GAEG;AAEH,MAAM,MAAM,aAAa,GAAG,MAAM,IAAI,CAAC;AAcvC,wBAAgB,cAAc,CAC5B,OAAO,EAAE,WAAW,EACpB,WAAW,EAAE,aAAa,EAC1B,YAAY,EAAE,aAAa,GAC1B,IAAI,CA8CN;AAED,wBAAgB,OAAO,CAAC,WAAW,EAAE,MAAM,EAAE,WAAW,EAAE,CAAC,KAAK,EAAE,MAAM,KAAK,IAAI,GAAG,IAAI,CAEvF"}
